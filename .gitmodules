@@ -1,0 +1,12 @@
+[submodule "Medium-Reader"]
+	path = Medium-Reader
+	url = ./Medium-Reader/
+[submodule "Event"]
+	path = Event
+	url = ./Event/
+[submodule "HQ-Evo"]
+	path = HQ-Evo
+	url = ./HQ-Evo/
+[submodule "LB-docs"]
+	path = LB-docs
+	url = ./LB-docs/
