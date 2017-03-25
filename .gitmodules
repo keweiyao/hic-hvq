@@ -1,12 +1,12 @@
 [submodule "Medium-Reader"]
 	path = Medium-Reader
-	url = ./Medium-Reader/
+	url = https://github.com/keweiyao/Medium-Reader.git
 [submodule "Event"]
 	path = Event
-	url = ./Event/
+	url = https://github.com/keweiyao/Event.git
 [submodule "HQ-Evo"]
 	path = HQ-Evo
-	url = ./HQ-Evo/
+	url = https://github.com/keweiyao/HQ-Evo.git
 [submodule "LB-docs"]
 	path = LB-docs
-	url = ./LB-docs/
+	url = https://github.com/keweiyao/LB-doc.git
