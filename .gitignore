@@ -3,3 +3,4 @@ build/
 */cython/*.cpp
 packages
 */build
+*test*/

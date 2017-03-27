@@ -29,9 +29,10 @@ setup(ext_modules=cythonize(extensions))
 #-----------Medium Reader------------------
 setup(
     ext_modules = cythonize([
-    Extension("medium", ["./Medium-Reader/medium.pyx"],
+    Extension("medium", ["./Medium-Reader/medium.pyx"], language="c++", 
               libraries=["m"])
     ]),
+     include_dirs=[numpy.get_include()]
 )
 
 #-------------Event Module compiled at last------------------
