@@ -10,3 +10,6 @@
 [submodule "LB-docs"]
 	path = LB-docs
 	url = https://github.com/keweiyao/LB-doc.git
+[submodule "vishnew"]
+	path = vishnew
+	url = ./vishnew/
