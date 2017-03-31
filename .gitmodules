@@ -1,11 +1,11 @@
 [submodule "Medium-Reader"]
-	path = Medium-Reader
+	path = ./LBT-LGV/Medium-Reader
 	url = https://github.com/keweiyao/Medium-Reader.git
 [submodule "Event"]
-	path = Event
+	path = ./LBT-LGV/Event
 	url = https://github.com/keweiyao/Event.git
 [submodule "HQ-Evo"]
-	path = HQ-Evo
+	path = ./LBT-LGV/HQ-Evo
 	url = https://github.com/keweiyao/HQ-Evo.git
 [submodule "LB-docs"]
 	path = LB-docs
@@ -13,3 +13,6 @@
 [submodule "vishnew"]
 	path = vishnew
 	url = https://github.com/keweiyao/vishnew.git
+[submodule "trento"]
+	path = trento
+	url = https://github.com/Duke-QCD/trento.git
