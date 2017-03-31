@@ -1,18 +1,24 @@
 [submodule "Medium-Reader"]
-	path = ./LBT-LGV/Medium-Reader
+	path = models/LBT-LGV/Medium-Reader
 	url = https://github.com/keweiyao/Medium-Reader.git
 [submodule "Event"]
-	path = ./LBT-LGV/Event
+	path = models/LBT-LGV/Event
 	url = https://github.com/keweiyao/Event.git
 [submodule "HQ-Evo"]
-	path = ./LBT-LGV/HQ-Evo
+	path = models/LBT-LGV/HQ-Evo
 	url = https://github.com/keweiyao/HQ-Evo.git
 [submodule "LB-docs"]
 	path = LB-docs
 	url = https://github.com/keweiyao/LB-doc.git
 [submodule "vishnew"]
-	path = vishnew
+	path = models/vishnew
 	url = https://github.com/keweiyao/vishnew.git
 [submodule "trento"]
-	path = trento
+	path = models/trento
 	url = https://github.com/Duke-QCD/trento.git
+[submodule "models/urqmd-afterburner"]
+	path = models/urqmd-afterburner
+	url = https://github.com/jbernhard/urqmd-afterburner.git
+[submodule "models/frzout"]
+	path = models/frzout
+	url = https://github.com/jbernhard/frzout.git

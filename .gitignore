@@ -1,6 +1,6 @@
-qpQGP/
 build/
 */cython/*.cpp
-packages
 */build
 *test*/
+*work*/
+*.egg-info/
