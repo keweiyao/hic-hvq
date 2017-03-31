@@ -82,7 +82,7 @@ for i in models/*/; do
     # let python find packages in the temporary directory -- this is necessary
     # because generating the eos table for vishnew requires frzout (note frzout
     # installs first because it's alphabetically ahead)
-    export PYTHONPATH="$(echo $pkgdir/lib/python*/site-packages)"
+    export PYTHONPATH=$PYTHONPATH:"$(echo $pkgdir/lib*/python*/site-packages)"
   else
     echo "unknown build system for model $i"
     exit 1
@@ -92,7 +92,7 @@ for i in models/*/; do
 done
 
 # install the event runner script
-install -v models/run-events $pkgdir/bin
+install -v models/run-*-events $pkgdir/bin
 
 # create tgz for distributing to each job
 tar --verbose --create --gzip --file $destdir/$pkgname.tar.gz \

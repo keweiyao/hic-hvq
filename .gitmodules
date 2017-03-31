@@ -7,8 +7,8 @@
 [submodule "HQ-Evo"]
 	path = models/LBT-LGV/HQ-Evo
 	url = https://github.com/keweiyao/HQ-Evo.git
-[submodule "LB-docs"]
-	path = LB-docs
+[submodule "LB-doc"]
+	path = LB-doc
 	url = https://github.com/keweiyao/LB-doc.git
 [submodule "vishnew"]
 	path = models/vishnew
@@ -22,3 +22,6 @@
 [submodule "models/frzout"]
 	path = models/frzout
 	url = https://github.com/jbernhard/frzout.git
+[submodule "models/freestream"]
+	path = models/freestream
+	url = https://github.com/Duke-QCD/freestream.git

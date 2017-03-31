@@ -109,21 +109,23 @@ HDF5Writer::HDF5Writer(const fs::path& filename)
 {}
 
 void HDF5Writer::operator()(
-    int num, double impact_param, const Event& event) const {
+  int num, double impact_param, const Event& event) const {
   // Prepare arguments for new HDF5 dataset.
 
   // The dataset name is a prefix plus the event number.
   const std::string name{"event_" + std::to_string(num)};
+  const std::string nameTAB{"TAB_" + std::to_string(num)};
 
   // Cache a reference to the event grid -- will need it several times.
   const auto& grid = event.reduced_thickness_grid();
+  const auto& gridTAB = event.TAB_grid();
 
   // Define HDF5 datatype and dataspace to match the grid.
   const auto& datatype = hdf5::type<Event::Grid::element>();
   std::array<hsize_t, Event::Grid::dimensionality> shape;
   std::copy(grid.shape(), grid.shape() + shape.size(), shape.begin());
   auto dataspace = hdf5::make_dataspace(shape);
-
+  auto dataspaceTAB = hdf5::make_dataspace(shape);
   // Set dataset storage properties.
   H5::DSetCreatPropList proplist{};
   // Set chunk size to the entire grid.  For typical grid sizes (~100x100), this
@@ -137,6 +139,9 @@ void HDF5Writer::operator()(
   // Create the new dataset and write the grid.
   auto dataset = file_.createDataSet(name, datatype, dataspace, proplist);
   dataset.write(grid.data(), datatype);
+
+  auto datasetTAB = file_.createDataSet(nameTAB, datatype, dataspaceTAB, proplist);
+  datasetTAB.write(gridTAB.data(), datatype);
 
   // Write event attributes.
   hdf5_add_scalar_attr(dataset, "b", impact_param);

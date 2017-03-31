@@ -4,3 +4,9 @@ build/
 *test*/
 *work*/
 *.egg-info/
+run/*/
+run/*.dat
+run/*.gz
+run/*.h*
+run/*.conf*
+run/results

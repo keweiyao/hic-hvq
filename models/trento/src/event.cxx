@@ -52,7 +52,8 @@ Event::Event(const VarMap& var_map)
       xymax_(.5*nsteps_*dxy_),
       TA_(boost::extents[nsteps_][nsteps_]),
       TB_(boost::extents[nsteps_][nsteps_]),
-      TR_(boost::extents[nsteps_][nsteps_]) {
+      TR_(boost::extents[nsteps_][nsteps_]),
+	  TAB_(boost::extents[nsteps_][nsteps_]) {
   // Choose which version of the generalized mean to use based on the
   // configuration.  The possibilities are defined above.  See the header for
   // more information.
@@ -155,6 +156,7 @@ void Event::compute_reduced_thickness(GenMean gen_mean) {
     for (int ix = 0; ix < nsteps_; ++ix) {
       auto t = norm_ * gen_mean(TA_[iy][ix], TB_[iy][ix]);
       TR_[iy][ix] = t;
+	  TAB_[iy][ix] = TA_[iy][ix]*TB_[iy][ix];
       sum += t;
       // Center of mass grid indices.
       // No need to multiply by dxy since it would be canceled later.

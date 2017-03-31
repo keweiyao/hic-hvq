@@ -81,6 +81,10 @@ class Event {
   const Grid& reduced_thickness_grid() const
   { return TR_; }
 
+  /// The TAB grid for hard process vertex sampling
+  const Grid& TAB_grid() const
+  { return TAB_; }
+
  private:
   /// Compute a nuclear thickness function (TA or TB) onto a grid for a given
   /// nucleus and nucleon profile.  This destroys any data previously contained
@@ -116,7 +120,7 @@ class Event {
   const double xymax_;
 
   /// Nuclear thickness grids TA, TB and reduced thickness grid TR.
-  Grid TA_, TB_, TR_;
+  Grid TA_, TB_, TR_, TAB_;
 
   /// Center of mass coordinates in "units" of grid index (not fm).
   double ixcm_, iycm_;
