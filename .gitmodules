@@ -25,3 +25,6 @@
 [submodule "models/freestream"]
 	path = models/freestream
 	url = https://github.com/Duke-QCD/freestream.git
+[submodule "models/hvq-hadronization"]
+	path = models/hvq-hadronization
+	url = https://github.com/keweiyao/hvq-hadronization.git
