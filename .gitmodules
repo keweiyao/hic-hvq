@@ -28,3 +28,6 @@
 [submodule "models/hvq-hadronization"]
 	path = models/hvq-hadronization
 	url = https://github.com/keweiyao/hvq-hadronization.git
+[submodule "models/fortranformat"]
+	path = models/fortranformat
+	url = https://github.com/keweiyao/fortranformat.git
