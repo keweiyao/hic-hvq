@@ -43,4 +43,9 @@ Then go to run/ and run event
 + Final state heavy meson data: h-meson-final.dat (OSCAR1997A)
 + Final state light hadron data: particles_out.dat
 
+For the usage of the heavy quark module, currently please checkout
+
+.. code::
+
+  models/run-hvq-events
 
