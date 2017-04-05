@@ -13,8 +13,8 @@ Requirements:
 
   python3, h5py lib and Cython installed
 
-First TRENTo generate the xy-IC for both hard (T_AA) and soft (T_R) event.
-The pT distribution is reweighted as FONLL+EPS09nlo.
+First TRENTo generates the xy-IC for both hard (T_AA) and soft (T_R) event.
+The pT distribution may be reweighted as FONLL+EPS09nlo.
 
 First run medium evolution:
 
