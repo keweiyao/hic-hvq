@@ -16,7 +16,8 @@ Requirements:
 First TRENTo generates the xy-IC for both hard (T_AA) and soft (T_R) event.
 The pT distribution may be reweighted as FONLL+EPS09nlo.
 
-First run medium evolution:
+For the medium evolution, use Jonah's hic-ebe package:
+https://github.com/jbernhard/heavy-ion-collisions-osg
 
    + TRENTo + freestream + Vishnew + frzout + UrQMD
 
