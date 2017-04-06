@@ -1,7 +1,7 @@
 build/
 */cython/*.cpp
 */build
-*test*/
+test*/
 *work*/
 *.egg-info/
 run/*/
