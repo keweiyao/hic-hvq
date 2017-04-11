@@ -85,6 +85,8 @@ class Event {
   const Grid& TAB_grid() const
   { return TAB_; }
 
+  const double& grid_dxy() const
+  { return dxy_; }
  private:
   /// Compute a nuclear thickness function (TA or TB) onto a grid for a given
   /// nucleus and nucleon profile.  This destroys any data previously contained

@@ -65,12 +65,16 @@ def read_text_file(filename):
 
 def main():
     # parse config file
-    if len(sys.argv) == 2:
+    if len(sys.argv) >= 2:
         with open(sys.argv[1], 'r') as f:
             config = dict(
                 (i.strip() for i in l.split('=', maxsplit=1))
                 for l in f if l[0] != '#'
             )
+        if len(sys.argv) == 3:
+            run_id = int(sys.argv[2])
+        else:    
+            run_id = 0
     else:
         config = {}
 
@@ -211,13 +215,13 @@ def main():
         res['nsamples'] = nsamples
 
         # hadronic afterburner
-        run_cmd('afterburner particles_in.dat particles_out.dat')
+        run_cmd('afterburner particles_in.dat particles_out_{}.dat'.format(run_id))
 
         # read final particle data
         ID, charge, pT, phi, y, eta = (
             np.array(col, dtype=dtype) for (col, dtype) in
             zip(
-                zip(*read_text_file('particles_out.dat')),
+                zip(*read_text_file('particles_out_{}.dat'.format(run_id))),
                 (2*[int] + 4*[float])
             )
         )
@@ -242,7 +246,7 @@ def main():
         res['M'] = phi_alice.size
         res['Qn'] = [np.exp(1j*n*phi_alice).sum() for n in range(1, 7)]
 
-    results.tofile('results')
+    results.tofile('results_{}.dat'.format(run_id))
 
 
 if __name__ == "__main__":

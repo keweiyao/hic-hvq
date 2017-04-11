@@ -5,13 +5,12 @@ uname -nr
 
 # read arguments
 inputfile=$1
-desturl=$2
+eventperjob=$2
+desturl=$3
 
-#rm initial.hdf
-#for f in ./*.h*; do
-#  rm -v $f
-#done
-
+if [[ -f initial.hdf ]]; then
+  rm initial.hdf
+fi
 
 # load necessary modules
 source /cvmfs/oasis.opensciencegrid.org/osg/modules/lmod/current/init/bash
@@ -28,10 +27,19 @@ export XDG_DATA_HOME="$prefix/share"
 export PYTHONPATH="$(echo $prefix/lib*/python*/site-packages)"
 
 # go!
-# first, run medium
-#run-medium-events $inputfile || exit 1
-# second, run hvq event 
-run-hvq-events JetData.h5 initial.hdf $inputfile || exit 1
+for i in `seq 1 $eventperjob`; do
+  # first clean the info from last run
+  if [[ -f initial.hdf ]]; then
+    rm initial.hdf
+  fi
+  if [[ -f JetData.h5 ]]; then
+    rm JetData.h5
+  fi
+  # first, run medium
+  run-medium-events $inputfile $i || exit 1
+  # second, run hvq event 
+  run-hvq-events JetData.h5 initial.hdf $inputfile $i || exit 1
+done
 # transfer results
 # try to be fault-tolerant
 #globus() {
