@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import numpy as np
 import h5py
 import subprocess
@@ -46,7 +45,7 @@ def main():
 
 	# Run Model
 	for i in range(500):
-		print("t = %1.2f [fm/c]"%e1.sys_time() )
+		print ("t = %1.2f [fm/c]"%e1.sys_time())
 		status = e1.perform_hydro_step()
 		if not status:
 			break

@@ -7,14 +7,15 @@ uname -nr
 inputfile=$1
 desturl=$2
 
-for f in ./*.h*; do
-  rm -v $f
-done
+rm initial.hdf
+#for f in ./*.h*; do
+#  rm -v $f
+#done
 
 
 # load necessary modules
-#source /cvmfs/oasis.opensciencegrid.org/osg/modules/lmod/current/init/bash
-#module load python/3.5.2 all-pkgs gcc/6.2.0 boost hdf5 || exit 1
+source /cvmfs/oasis.opensciencegrid.org/osg/modules/lmod/current/init/bash
+module load python/3.5.2 all-pkgs gcc/6.2.0 boost hdf5 || exit 1
 
 # unpack package
 export pkgname='hic-hvq'
@@ -24,13 +25,13 @@ tar xzf $pkgname.tar.gz
 prefix="$(pwd)/$pkgname"
 export PATH="$prefix/bin:$PATH"
 export XDG_DATA_HOME="$prefix/share"
-export PYTHONPATH="$(echo $prefix/lib64/python*/site-packages)":"$(echo $prefix/lib/python*/site-packages)"
-echo $XDG_DATA_HOME
+export PYTHONPATH="$(echo $prefix/lib*/python*/site-packages)"
+
 # go!
 # first, run medium
 run-medium-events $inputfile || exit 1
 # second, run hvq event 
-run-hvq-events JetData.h5 initial.hdf || exit 1
+python $pkgname/bin/run-hvq-events JetData.h5 initial.hdf || exit 1
 # transfer results
 # try to be fault-tolerant
 #globus() {
