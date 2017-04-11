@@ -5,16 +5,16 @@ uname -nr
 
 # read arguments
 inputfile=$1
+eventperjob=3
 desturl=$2
 
-for f in ./*.h*; do
-  rm -v $f
-done
-
+if [[ -f initial.hdf ]]; then
+  rm initial.hdf
+fi
 
 # load necessary modules
-#source /cvmfs/oasis.opensciencegrid.org/osg/modules/lmod/current/init/bash
-#module load python/3.5.2 all-pkgs gcc/6.2.0 boost hdf5 || exit 1
+source /cvmfs/oasis.opensciencegrid.org/osg/modules/lmod/current/init/bash
+module load python/3.5.2 all-pkgs gcc/6.2.0 boost hdf5 || exit 1
 
 # unpack package
 export pkgname='hic-hvq'
@@ -24,23 +24,39 @@ tar xzf $pkgname.tar.gz
 prefix="$(pwd)/$pkgname"
 export PATH="$prefix/bin:$PATH"
 export XDG_DATA_HOME="$prefix/share"
-export PYTHONPATH="$(echo $prefix/lib64/python*/site-packages)":"$(echo $prefix/lib/python*/site-packages)"
-echo $XDG_DATA_HOME
+export PYTHONPATH="$(echo $prefix/lib*/python*/site-packages)"
+
 # go!
-# first, run medium
-run-medium-events $inputfile || exit 1
-# second, run hvq event 
-run-hvq-events JetData.h5 initial.hdf || exit 1
+for i in `seq 1 $eventperjob`; do
+  # first clean the info from last run
+  if [[ -f initial.hdf ]]; then
+    rm initial.hdf
+  fi
+  if [[ -f JetData.h5 ]]; then
+    rm JetData.h5
+  fi
+  # first, run medium
+  run-medium-events $inputfile $i || exit 1
+  # second, run hvq event 
+  run-hvq-events JetData.h5 initial.hdf $inputfile $i || exit 1
+done
+
 # transfer results
 # try to be fault-tolerant
-#globus() {
-#  globus-url-copy \
-#    -verbose -create-dest -restart -stall-timeout 30 $@ \
-#    results $desturl
-#}
+globus() {
+  for f in *[-,_][0-9].dat; do
+    globus-url-copy \
+    -verbose -create-dest -restart -stall-timeout 30 $@ \
+    $f $desturl
+  done
+  
+   globus-url-copy \
+    -verbose -create-dest -restart -stall-timeout 30 $@ \
+    event_weight.txt $desturl
+}
 
-#for i in {1..5}; do
-#  globus && break
-#  sleep 5 && false
-#done || \
+for i in {1..5}; do
+  globus && break
+  sleep 5 && false
+done || \
 #  globus -no-data-channel-authentication -no-third-party-transfers

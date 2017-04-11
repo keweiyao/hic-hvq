@@ -149,6 +149,8 @@ void HDF5Writer::operator()(
   hdf5_add_scalar_attr(dataset, "mult", event.multiplicity());
   for (const auto& ecc : event.eccentricity())
     hdf5_add_scalar_attr(dataset, "e" + std::to_string(ecc.first), ecc.second);
+
+  hdf5_add_scalar_attr(dataset, "dx", event.grid_dxy());
 }
 
 #endif  // TRENTO_HDF5

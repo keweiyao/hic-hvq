@@ -5,6 +5,7 @@ export FFLAGS=$CFLAGS
 export CXXFLAGS=$CFLAGS
 
 # extra preparation when compiling on OSG submit hosts
+load_osg(){
 if [[ $(hostname) =~ opensciencegrid.org|osgconnect.net ]]; then
   # load lmod
   source /cvmfs/oasis.opensciencegrid.org/osg/modules/lmod/current/init/bash
@@ -39,6 +40,9 @@ if [[ $(hostname) =~ opensciencegrid.org|osgconnect.net ]]; then
   # this uses -L flags to give $LIBRARY_PATH higher priority
   export LDFLAGS="-L${LIBRARY_PATH//:/ -L}"
 fi
+}
+
+load_osg
 
 # read optional argument destdir (where to place package file)
 # default is the current directory
@@ -55,6 +59,12 @@ pkgdir="$installdir/$pkgname"
 # build each model
 for i in models/*/; do
   pushd $i
+  
+  if [[ $(basename $i) == "vishnew" ]]; then
+    module unload gcc
+    FC=/cvmfs/oasis.opensciencegrid.org/osg/modules/hdf5/1.8.13/bin/h5fc
+    FFLAGS='-march=x86-64 -ffast-math'
+  fi
 
   # determine whether to build with CMake or python
   if [[ -f CMakeLists.txt ]]; then
@@ -68,12 +78,11 @@ for i in models/*/; do
         -DCMAKE_INSTALL_PREFIX=/ \
         .. || exit 1
     fi
-
     # compile and install to the temporary directory
     make --jobs=$(nproc) DESTDIR=$pkgdir install || exit 1
   elif [[ -f setup.py ]]; then
     # install python packages
-    python3 setup.py install \
+    python setup.py install \
       --no-compile \
       --root=$pkgdir \
       --prefix= \
@@ -87,6 +96,11 @@ for i in models/*/; do
     echo "unknown build system for model $i"
     exit 1
   fi
+
+  if [[ $(basename $i) == "vishnew" ]]; then
+     load_osg
+  fi
+
 
   popd
 done
