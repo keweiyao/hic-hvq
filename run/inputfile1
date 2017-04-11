@@ -10,7 +10,7 @@ N-hvq = 20000
 # -------- An example of LBT ---------------
 hvq-mode = LBT
 c22 = True
-c23 = True
+c23 = False
 c32 = False
 K = 1.0
 Lambda = 0.5
