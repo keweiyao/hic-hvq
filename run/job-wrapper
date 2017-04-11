@@ -5,7 +5,7 @@ uname -nr
 
 # read arguments
 inputfile=$1
-eventperjob=3
+eventperjob=1
 desturl=$2
 
 if [[ -f initial.hdf ]]; then
@@ -47,16 +47,16 @@ globus() {
   for f in *[-,_][0-9].dat; do
     globus-url-copy \
     -verbose -create-dest -restart -stall-timeout 30 $@ \
-    $f $desturl
+    $f $desturl/osg-$f
   done
   
-   globus-url-copy \
-    -verbose -create-dest -restart -stall-timeout 30 $@ \
-    event_weight.txt $desturl
+  globus-url-copy \
+  -verbose -create-dest -restart -stall-timeout 30 $@ \
+  event_weight.txt $desturl/event_weight.dat
 }
 
 for i in {1..5}; do
   globus && break
   sleep 5 && false
 done || \
-#  globus -no-data-channel-authentication -no-third-party-transfers
+  globus -no-data-channel-authentication -no-third-party-transfers

@@ -41,7 +41,7 @@ done
 cd "$(dirname "${BASH_SOURCE[0]}")"/..
 
 # make package, place in scratch directory
-pkgfile='hic-osg.tar.gz'
+pkgfile='hic-hvq.tar.gz'
 ./makepkg $scratchdir
 
 # copy condor executable to scratch
@@ -79,7 +79,7 @@ job_machine_attrs_history_length = $histlen
 requirements = $requirements
 
 request_memory = 500M
-request_disk = 500M
+request_disk = 1.5G
 rank = KFlops
 
 executable = $exefile
