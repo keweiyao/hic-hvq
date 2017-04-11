@@ -17,7 +17,7 @@ if [[ $(hostname) =~ opensciencegrid.org|osgconnect.net ]]; then
   #  - hdf5 for trento
   #  - python and packages
   module purge
-  module load gcc/6.2.0 cmake boost hdf5 python/3.5.2 all-pkgs
+  module load gcc/6.2.0 cmake boost gsl hdf5 python/3.5.2 all-pkgs
 
   # the modules set the standard environment variables CPATH and LIBRARY_PATH
   # set corresponding variables for cmake
