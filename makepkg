@@ -6,7 +6,6 @@ export CXXFLAGS=$CFLAGS
 
 # extra preparation when compiling on OSG submit hosts
 load_osg(){
-if [[ $(hostname) =~ opensciencegrid.org|osgconnect.net ]]; then
   # load lmod
   source /cvmfs/oasis.opensciencegrid.org/osg/modules/lmod/current/init/bash
 
@@ -39,10 +38,11 @@ if [[ $(hostname) =~ opensciencegrid.org|osgconnect.net ]]; then
   # the linker reads $LIBRARY_PATH but gives it lower priority than the standard paths
   # this uses -L flags to give $LIBRARY_PATH higher priority
   export LDFLAGS="-L${LIBRARY_PATH//:/ -L}"
-fi
 }
 
-load_osg
+if [[ $(hostname) =~ opensciencegrid.org|osgconnect.net ]]; then
+  load_osg
+fi
 
 # read optional argument destdir (where to place package file)
 # default is the current directory
@@ -60,7 +60,7 @@ pkgdir="$installdir/$pkgname"
 for i in models/*/; do
   pushd $i
   
-  if [[ $(basename $i) == "vishnew" ]]; then
+  if [[ $(basename $i) == "vishnew" ]] && [[ $(hostname) =~ opensciencegrid.org|osgconnect.net ]]; then
     module unload gcc
     FC=/cvmfs/oasis.opensciencegrid.org/osg/modules/hdf5/1.8.13/bin/h5fc
     FFLAGS='-march=x86-64 -ffast-math'
@@ -82,7 +82,7 @@ for i in models/*/; do
     make --jobs=$(nproc) DESTDIR=$pkgdir install || exit 1
   elif [[ -f setup.py ]]; then
     # install python packages
-    python setup.py install \
+    python3 setup.py install \
       --no-compile \
       --root=$pkgdir \
       --prefix= \
@@ -97,7 +97,7 @@ for i in models/*/; do
     exit 1
   fi
 
-  if [[ $(basename $i) == "vishnew" ]]; then
+  if [[ $(basename $i) == "vishnew" ]] && [[ $(hostname) =~ opensciencegrid.org|osgconnect.net ]]; then
      load_osg
   fi
 

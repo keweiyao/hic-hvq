@@ -91,7 +91,6 @@ def main():
             '--output', initial_file,
             config.get('trento_args', '')
         )
-
         with h5py.File(initial_file, 'r') as f:
             for dset in f.values():
                 if dset.name[1:4] != 'TAB':

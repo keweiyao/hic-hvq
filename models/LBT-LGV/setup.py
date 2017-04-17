@@ -39,7 +39,7 @@ modules = [
 #                        include_dirs=includes,
                          library_dirs=libs,
                          extra_compile_args=["-std=c++11", '-march=native', '-fPIC'],
-                         libraries=["m", "gsl", "gslcblas", "boost_filesystem", "hdf5", "hdf5_cpp"]),
+                         libraries=["m", "gsl", "gslcblas", "", "boost_filesystem", "hdf5", "hdf5_cpp"]),
                 Extension('HqLGV',
                          sources=fileLGV,
                          language="c++",

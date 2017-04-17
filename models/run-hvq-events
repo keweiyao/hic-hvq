@@ -7,6 +7,7 @@ import sys
 import os
 import event
 from ast import literal_eval as eva
+import fortranformat as ff
 
 def main():
     # parse config file
@@ -31,16 +32,15 @@ def main():
         print('{} = {}'.format(key, val))
 
     pkgname = os.environ['pkgname']
-    dynamic_config = {  'type'	  : 'dynamic', 
-                        'hydrofile' : hydrofilename	}
+    dynamic_config = {  'type'      : 'dynamic', 
+                        'hydrofile' : hydrofilename    }
 
     if config.get('hvq-mode', 'LBT'):
-        print (config.get('c32', False))
         hvq_config = {  'physics'   : 'LBT',
                         '2->2'    : eva(config.get('c22', 'True')),
                         '2->3'    : eva(config.get('c23', 'False')),
                         '3->2'    : eva(config.get('c32', 'False')),
-                        'Nf'	: 3,
+                        'Nf'    : 3,
                         'mass'    : float(config.get('mass', 1.3)),
                         'Kfactor' : float(config.get('K', 1.0)),
                         'lambda_rescale' : float(config.get('Lambda', 1.0)) }  
@@ -70,8 +70,10 @@ def main():
     
     e1 = event.event(   medium_flags=dynamic_config , 
                         physics_flags=hvq_config,
-			Tc=float(config.get('Tc', 0.154)),
-                        table_folder="{}/share/hvq/tables/".format(pkgname)   )
+                        Tc=float(config.get('Tc', 0.154)),
+                        table_folder="{}/share/hvq/tables/".format(pkgname),
+                        refresh_table=eva(config.get('new-table', 'False'))
+					)
 
     e1.initialize_HQ(   NQ=NQ,
                         init_flags=init_config   )
@@ -84,11 +86,42 @@ def main():
             break
     e1.output_oscar('./hvq-final-{}.dat'.format(run_id))
 
-	
+    
     # hadronization
     os.environ["ftn20"] = "./h-meson-final-{}.dat".format(run_id)
     os.environ["ftn30"] = "./{}/share/hvq-hadronization/parameters_hd.dat".format(pkgname)
-    os.environ["ftn40"] = "./{}/share/hvq-hadronization/recomb_c.dat".format(pkgname)
+    os.environ["ftn40"] = "./{}/share/hvq-hadronization/recomb_c_tot.dat".format(pkgname)
+    os.environ["ftn50"] = "./{}/share/hvq-hadronization/recomb_c_BR1.dat".format(pkgname)
     subprocess.run("hvq-hadronization", stdin=open('./hvq-final-{}.dat'.format(run_id)))
+
+    # save everything back in hdf5 format for God's sake ...
+    # reading back fortran format in python is too slow ...
+    line = ff.FortranRecordReader('i10,2x,i10,17(2x,d12.6)')
+    fh5 = h5py.File('HeavyFlavorResult.hdf5', 'a')
+    #n, id, px, py, pz, p0, M, x, y, z, t, T, vx, vy, vz, ipx, ipy, ipz, weight
+    pv = []
+    pT0 = []
+    with open('./hvq-final-{}.dat'.format(run_id)) as f:
+        for i, l in enumerate(f):
+            if i>3:
+                ds = line.read(l)
+                pv.append(ds[2:6])
+                pT0.append(np.sqrt(ds[16]**2+ds[15]**2))
+    fh5.create_dataset(name='quark-pv-{}'.format(run_id), data=np.array(pv))
+    fh5.create_dataset(name='quark-pT0-{}'.format(run_id), data=np.array(pT0))
+
+    pv = []
+    pT0 = []
+    with open('./h-meson-final-{}.dat'.format(run_id)) as f:
+        for i, l in enumerate(f):
+            if i>3:
+                ds = line.read(l)
+                pv.append(ds[2:6])
+                pT0.append(np.sqrt(ds[16]**2+ds[15]**2))
+    fh5.create_dataset(name='meson-pv-{}'.format(run_id), data=np.array(pv))
+    fh5.create_dataset(name='meson-pT0-{}'.format(run_id), data=np.array(pT0))
 if __name__ == "__main__":
     main()
+
+
+
