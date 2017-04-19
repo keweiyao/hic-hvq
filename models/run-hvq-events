@@ -99,27 +99,35 @@ def main():
     line = ff.FortranRecordReader('i10,2x,i10,17(2x,d12.6)')
     fh5 = h5py.File('HeavyFlavorResult.hdf5', 'a')
     #n, id, px, py, pz, p0, M, x, y, z, t, T, vx, vy, vz, ipx, ipy, ipz, weight
+    pid = []
     pv = []
     pT0 = []
     with open('./hvq-final-{}.dat'.format(run_id)) as f:
         for i, l in enumerate(f):
             if i>3:
                 ds = line.read(l)
+                pid.append(ds[1])
                 pv.append(ds[2:6])
                 pT0.append(np.sqrt(ds[16]**2+ds[15]**2))
+    fh5.create_dataset(name='quark-pid-{}'.format(run_id), data=np.array(pid))
     fh5.create_dataset(name='quark-pv-{}'.format(run_id), data=np.array(pv))
     fh5.create_dataset(name='quark-pT0-{}'.format(run_id), data=np.array(pT0))
-
+    
+    pid = []
     pv = []
     pT0 = []
     with open('./h-meson-final-{}.dat'.format(run_id)) as f:
         for i, l in enumerate(f):
             if i>3:
                 ds = line.read(l)
+                pid.append(ds[1])
                 pv.append(ds[2:6])
                 pT0.append(np.sqrt(ds[16]**2+ds[15]**2))
+    fh5.create_dataset(name='meson-pid-{}'.format(run_id), data=np.array(pid))
     fh5.create_dataset(name='meson-pv-{}'.format(run_id), data=np.array(pv))
     fh5.create_dataset(name='meson-pT0-{}'.format(run_id), data=np.array(pT0))
+
+    fh5.close()
 if __name__ == "__main__":
     main()
 
