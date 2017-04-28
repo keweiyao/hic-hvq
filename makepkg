@@ -16,7 +16,7 @@ load_osg(){
   #  - hdf5 for trento
   #  - python and packages
   module purge
-  module load gcc/6.2.0 cmake boost gsl hdf5 python/3.5.2 all-pkgs
+  module load gcc/6.2.0 cmake boost/1.62.0 gsl/2.3 hdf5/1.8.13 python/3.5.2 all-pkgs
 
   # the modules set the standard environment variables CPATH and LIBRARY_PATH
   # set corresponding variables for cmake

@@ -38,14 +38,14 @@ modules = [
                          language="c++",
 #                        include_dirs=includes,
                          library_dirs=libs,
-                         extra_compile_args=["-std=c++11", '-march=native', '-fPIC'],
+                         extra_compile_args=["-std=c++11", '-fPIC'],
                          libraries=["m", "gsl", "gslcblas", "boost_filesystem", "hdf5", "hdf5_cpp"]),
                 Extension('HqLGV',
                          sources=fileLGV,
                          language="c++",
 #                        include_dirs=includes,
                          library_dirs=libs,
-                         extra_compile_args=["-std=c++11", '-march=native', '-fPIC'],
+                         extra_compile_args=["-std=c++11", '-fPIC'],
                          libraries=["m", "gsl", "gslcblas", "boost_filesystem", "hdf5", "hdf5_cpp"]),
 ]
 
