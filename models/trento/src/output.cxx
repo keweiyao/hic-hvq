@@ -35,6 +35,8 @@ void write_stream(std::ostream& os, int width,
      << setw(15) << fixed      << impact_param
      << setw(5)                << event.npart()
      << setw(18) << scientific << event.multiplicity()
+	 << setw(18) << scientific << event.totTAB()
+	 << setw(18) << scientific << event.ncoll()
      << fixed;
 
   for (const auto& ecc : event.eccentricity())

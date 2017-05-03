@@ -33,11 +33,13 @@ class NucleonProfile {
 
   /// Randomly fluctuate the profile.  Should be called prior to evaluating the
   /// thickness function for a new nucleon.
-  void fluctuate();
+  double fluctuate(double user_prefactor);
 
   /// Compute the thickness function at a (squared) distance from the profile
   /// center.
   double thickness(double distance_sqr) const;
+
+  double overlap_norm(double b2) const;
 
   /// Randomly determine if a pair of nucleons participates.
   bool participate(Nucleon& A, Nucleon& B) const;
@@ -79,7 +81,7 @@ class Nucleon {
  public:
   /// Only a default constructor is necessary\---the class is designed to be
   /// constructed once and repeatedly updated.
-  Nucleon() = default;
+  Nucleon():gamma(-1.){};
 
   /// The transverse \em x position.
   double x() const;
@@ -92,6 +94,9 @@ class Nucleon {
 
   /// Whether or not this nucleon is a participant.
   bool is_participant() const;
+
+  void set_gamma(double);
+  double get_gamma(void) const;
 
  private:
   /// A Nucleus must be able to set its Nucleon positions.
@@ -109,6 +114,9 @@ class Nucleon {
 
   /// Internal storage of the position.
   double x_, y_, z_;
+
+  /// Internal storage of fluct
+  double gamma;
 
   /// Internal storage of participant status.
   bool participant_;
@@ -135,6 +143,14 @@ inline bool Nucleon::is_participant() const {
   return participant_;
 }
 
+inline double Nucleon::get_gamma() const {
+  return gamma;
+}
+
+inline void Nucleon::set_gamma(double _gamma) {
+  gamma = _gamma;
+}
+
 inline void Nucleon::set_position(double x, double y, double z) {
   x_ = x;
   y_ = y;
@@ -156,9 +172,18 @@ inline double NucleonProfile::max_impact() const {
   return std::sqrt(max_impact_sqr_);
 }
 
-inline void NucleonProfile::fluctuate() {
-  prefactor_ = fluct_dist_(random::engine) *
+inline double NucleonProfile::fluctuate(double user_prefactor) {
+  if (user_prefactor < 0.) {
+	 double random_gamma = fluct_dist_(random::engine);
+	 prefactor_ =  random_gamma *
      math::double_constants::one_div_two_pi / width_sqr_;
+	 return random_gamma;
+  }
+  else {
+     prefactor_ = user_prefactor *
+     math::double_constants::one_div_two_pi / width_sqr_;
+     return user_prefactor;
+  }
 }
 
 inline double NucleonProfile::thickness(double distance_sqr) const {
@@ -167,10 +192,14 @@ inline double NucleonProfile::thickness(double distance_sqr) const {
   return prefactor_ * fast_exp_(neg_one_div_two_width_sqr_*distance_sqr);
 }
 
+inline double NucleonProfile::overlap_norm(double b2) const {
+  return prefactor_*prefactor_* M_PI * width_sqr_ * fast_exp_(0.5*neg_one_div_two_width_sqr_*b2);
+}
+
 inline bool NucleonProfile::participate(Nucleon& A, Nucleon& B) const {
   // If both nucleons are already participants, there's nothing to do.
-  if (A.is_participant() && B.is_participant())
-    return true;
+  //if (A.is_participant() && B.is_participant())
+  //  return true;
 
   double dx = A.x() - B.x();
   double dy = A.y() - B.y();

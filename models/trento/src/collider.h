@@ -56,6 +56,7 @@ class Collider {
 
   /// Number of events to run.
   const int nevents_;
+  int incoming;
 
   /// Minimum and maximum impact parameter.
   const double bmin_, bmax_;

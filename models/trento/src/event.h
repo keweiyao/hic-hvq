@@ -18,6 +18,7 @@
 namespace trento {
 
 class NucleonProfile;
+class Nucleon;
 
 /// \rst
 /// The primary computation class, responsible for constructing nuclear
@@ -67,6 +68,12 @@ class Event {
   const double& multiplicity() const
   { return multiplicity_; }
 
+  const double& totTAB() const
+  { return TAB_tot_; }
+  
+  const int& ncoll() const
+  { return ncoll_; }
+
   /// \rst
   /// Eccentricity harmonics `\varepsilon_n` for *n* = 2--5.
   /// Returns a map of `(n : \varepsilon_n)` pairs, so e.g.::
@@ -87,6 +94,10 @@ class Event {
 
   const double& grid_dxy() const
   { return dxy_; }
+
+  /// clear and increase TAB
+  void clear_TAB(void);
+  void accumulate_TAB(Nucleon& A, Nucleon& B, NucleonProfile& profile);
  private:
   /// Compute a nuclear thickness function (TA or TB) onto a grid for a given
   /// nucleus and nucleon profile.  This destroys any data previously contained
@@ -111,6 +122,9 @@ class Event {
 
   /// Normalization factor.
   const double norm_;
+ 
+  /// TAB_tot
+  double TAB_tot_;
 
   /// Grid step size.
   const double dxy_;
@@ -128,7 +142,7 @@ class Event {
   double ixcm_, iycm_;
 
   /// Number of participants.
-  int npart_;
+  int npart_, ncoll_;
 
   /// Multiplicity (total entropy).
   double multiplicity_;

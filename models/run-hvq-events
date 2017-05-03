@@ -10,6 +10,8 @@ from ast import literal_eval as eva
 import fortranformat as ff
 
 def main():
+    for s in sys.argv:
+        print(s)
     # parse config file
     if len(sys.argv) >= 3:
         hydrofilename = sys.argv[1]

@@ -5,6 +5,7 @@
 #include "event.h"
 
 #include <algorithm>
+#include <iostream>
 #include <cmath>
 
 #include <boost/program_options/variables_map.hpp>
@@ -101,6 +102,46 @@ inline const T& clip(const T& value, const T& min, const T& max) {
 
 }  // unnamed namespace
 
+// A and B must be participant 
+void Event::clear_TAB(void){
+  ncoll_ = 0;
+  for (int iy = 0; iy < nsteps_; ++iy) {
+    for (int ix = 0; ix < nsteps_; ++ix) {
+      TAB_[iy][ix] = 0.;
+    }
+  }
+}
+
+void Event::accumulate_TAB(Nucleon& A, Nucleon& B, NucleonProfile& profile){
+    ncoll_ ++;
+	double xA = A.x() + xymax_;
+    double yA = A.y() + xymax_;
+	double xB = B.x() + xymax_;
+    double yB = B.y() + xymax_;
+	double x = (xA+xB)/2.;
+    double y = (yA+yB)/2.;
+    if (A.get_gamma() < 0.) A.set_gamma(profile.fluctuate(-1.));
+    if (B.get_gamma() < 0.) B.set_gamma(profile.fluctuate(-1.));
+	profile.fluctuate(1.);
+	const double r = profile.radius();
+	int ixmin = clip(static_cast<int>((x-r)/dxy_), 0, nsteps_-1);
+    int iymin = clip(static_cast<int>((y-r)/dxy_), 0, nsteps_-1);
+    int ixmax = clip(static_cast<int>((x+r)/dxy_), 0, nsteps_-1);
+    int iymax = clip(static_cast<int>((y+r)/dxy_), 0, nsteps_-1);
+
+    // Add profile to grid.
+	double TAAnorm = profile.overlap_norm((xA-xB)*(xA-xB) + (yA-yB)*(yA-yB));
+    for (auto iy = iymin; iy <= iymax; ++iy) {
+      double dysqA = std::pow(yA - (static_cast<double>(iy)+.5)*dxy_, 2);
+	  double dysqB = std::pow(yB - (static_cast<double>(iy)+.5)*dxy_, 2);
+      for (auto ix = ixmin; ix <= ixmax; ++ix) {
+        double dxsqA = std::pow(xA - (static_cast<double>(ix)+.5)*dxy_, 2);
+		double dxsqB = std::pow(xB - (static_cast<double>(ix)+.5)*dxy_, 2);
+        TAB_[iy][ix] += profile.thickness(dxsqA + dysqA)*profile.thickness(dxsqB + dysqB)/TAAnorm*A.get_gamma()*B.get_gamma();
+      }
+    }
+}
+
 void Event::compute_nuclear_thickness(
     const Nucleus& nucleus, NucleonProfile& profile, Grid& TX) {
   // Construct the thickness grid by looping over participants and adding each
@@ -133,7 +174,7 @@ void Event::compute_nuclear_thickness(
     int iymax = clip(static_cast<int>((y+r)/dxy_), 0, nsteps_-1);
 
     // Prepare profile for new nucleon.
-    profile.fluctuate();
+    profile.fluctuate(nucleon.get_gamma());
 
     // Add profile to grid.
     for (auto iy = iymin; iy <= iymax; ++iy) {
@@ -151,20 +192,20 @@ void Event::compute_reduced_thickness(GenMean gen_mean) {
   double sum = 0.;
   double ixcm = 0.;
   double iycm = 0.;
-
+  TAB_tot_ = 0.;
   for (int iy = 0; iy < nsteps_; ++iy) {
     for (int ix = 0; ix < nsteps_; ++ix) {
       auto t = norm_ * gen_mean(TA_[iy][ix], TB_[iy][ix]);
       TR_[iy][ix] = t;
-	  TAB_[iy][ix] = TA_[iy][ix]*TB_[iy][ix];
       sum += t;
       // Center of mass grid indices.
       // No need to multiply by dxy since it would be canceled later.
       ixcm += t * static_cast<double>(ix);
       iycm += t * static_cast<double>(iy);
+      TAB_tot_ += TAB_[iy][ix];
     }
   }
-
+  TAB_tot_ *= dxy_*dxy_;
   multiplicity_ = dxy_ * dxy_ * sum;
   ixcm_ = ixcm / sum;
   iycm_ = iycm / sum;

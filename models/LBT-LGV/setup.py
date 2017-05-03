@@ -51,10 +51,11 @@ modules = [
 
 data = ('/share/hvq/tables/', 
 	[fn for fn in glob('./HQ-Evo/tables/*.hdf5')] )
-
+spectra = ('/share/hvq/',
+        [fn for fn in glob('./Event/FONLL/*/*.dat')] )
 setup(
         ext_modules=cythonize(modules),
-	data_files=[data]
+	data_files=[data, spectra]
 )
 
 

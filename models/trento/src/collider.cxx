@@ -7,7 +7,7 @@
 #include <cmath>
 #include <string>
 #include <vector>
-
+#include <iostream>
 #include <boost/program_options/variables_map.hpp>
 
 #include "fwd_decl.h"
@@ -60,6 +60,7 @@ Collider::Collider(const VarMap& var_map)
       nucleusB_(create_nucleus(var_map, 1)),
       nucleon_profile_(var_map),
       nevents_(var_map["number-events"].as<int>()),
+      incoming(0),
       bmin_(var_map["b-min"].as<double>()),
       bmax_(determine_bmax(var_map, *nucleusA_, *nucleusB_, nucleon_profile_)),
       asymmetry_(determine_asym(*nucleusA_, *nucleusB_)),
@@ -89,6 +90,7 @@ void Collider::run_events() {
     // Write event data.
     output_(n, b, event_);
   }
+  //std::cout << "# cross_section = " << nevents_*M_PI*(bmax_*bmax_-bmin_*bmin_)/incoming*10. << " [mb]" << std::endl;
 }
 
 double Collider::sample_impact_param() {
@@ -97,8 +99,8 @@ double Collider::sample_impact_param() {
   // logical OR over all possible participant pairs.
   double b;
   bool collision = false;
-
   do {
+    incoming++;
     // Sample b from P(b)db = 2*pi*b.
     b = bmin_ + (bmax_ - bmin_) * std::sqrt(random::canonical<double>());
 
@@ -107,9 +109,14 @@ double Collider::sample_impact_param() {
     nucleusB_->sample_nucleons((asymmetry_ - 1.) * b);
 
     // Check each nucleon-nucleon pair.
+	event_.clear_TAB();
+	for (auto&& A : *nucleusA_) A.set_gamma(-1.);
+	for (auto&& B : *nucleusB_) B.set_gamma(-1.);
     for (auto&& A : *nucleusA_) {
       for (auto&& B : *nucleusB_) {
-        collision = nucleon_profile_.participate(A, B) || collision;
+		bool AB_collide = nucleon_profile_.participate(A, B);
+        collision =  AB_collide || collision;
+		if (AB_collide) event_.accumulate_TAB(A, B, nucleon_profile_);
       }
     }
   } while (!collision);
