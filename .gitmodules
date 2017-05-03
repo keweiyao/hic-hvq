@@ -16,9 +16,6 @@
 [submodule "trento"]
 	path = models/trento
 	url = https://github.com/Duke-QCD/trento.git
-[submodule "models/urqmd-afterburner"]
-	path = models/urqmd-afterburner
-	url = https://github.com/jbernhard/urqmd-afterburner.git
 [submodule "models/frzout"]
 	path = models/frzout
 	url = https://github.com/jbernhard/frzout.git
@@ -31,3 +28,9 @@
 [submodule "models/fortranformat"]
 	path = models/fortranformat
 	url = https://github.com/keweiyao/fortranformat.git
+[submodule "urqmd-afterburner"]
+	path = urqmd-afterburner
+	url = https://github.com/keweiyao/urqmd-afterburner.git
+[submodule "models/urqmd-afterburner"]
+	path = models/urqmd-afterburner
+	url = https://github.com/keweiyao/urqmd-afterburner.git
