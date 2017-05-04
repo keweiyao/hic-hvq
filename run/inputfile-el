@@ -1,7 +1,8 @@
 # medium config
-trento_args = --b-min=14. -n 129. -p 0.0 -k 1.6 -w 0.51 -x 6.4
-tau_fs = 0.
+trento_args = --b-min=1.9 --b-max=2.0 -x 6.4 -n 130 -p 0.0 -k 1.6 -w 0.5
+tau_fs = 0.0
 vishnew_args = VisHRG=0.5 VisMin=0.08 VisSlope=0.75 VisCurv=0.0 VisBulkNorm=1.1
+#vishnew_args = VisHRG=0.5 VisMin=0.06 VisSlope=2.0 VisCurv=0.05 VisBulkMax=0.015 VisBulkWidth=0.02
 Tswitch = 0.154
 Tc = 0.154
 # hvq config

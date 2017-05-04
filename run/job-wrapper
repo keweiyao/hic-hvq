@@ -5,7 +5,7 @@ uname -nr
 
 # read arguments
 inputfile=$1
-eventperjob=10
+eventperjob=1
 desturl=$2
 
 # load necessary modules
@@ -14,7 +14,7 @@ desturl=$2
 
 # unpack package
 export pkgname='hic-hvq'
-tar xzf $pkgname.tar.gz
+#tar xzf $pkgname.tar.gz
 
 # set environment variables
 prefix="$(pwd)/$pkgname"

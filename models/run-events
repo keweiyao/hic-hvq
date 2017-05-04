@@ -170,7 +170,7 @@ def main():
 
 			e = fs.energy_density()
 			e_above = e[e > eswitch].sum()
-			res['mult_factor'] = e.sum()/e_above if e_above > 0 else 1
+			soft_gp.attrs.create('mult_factor', e.sum()/e_above if e_above > 0 else 1)
 
 			np.savetxt('ed.dat', e)
 			for i in [1, 2]:
@@ -204,7 +204,6 @@ def main():
 		x, sigma, v, _ = np.hsplit(surface_data, [3, 6, 8])
 		pi = dict(zip(['xx', 'xy', 'yy'], surface_data.T[11:14]))
 		Pi = surface_data.T[15]
-
 		# create sampler surface object
 		surface = frzout.Surface(x, sigma, v, pi=pi, Pi=Pi, ymax=4)
 
@@ -238,8 +237,13 @@ def main():
 		run_cmd('afterburner {} particles_out_{}.dat particles_in.dat h-meson-final-{}.dat'.format(nsamples, run_id, run_id))
 
 		# ==================Data Processing==================================
+		# For initial charm
+		fcharm = h5py.File('./HeavyFlavorResult.hdf5', 'r')
+		charm_ipT = fcharm['quark-pT0-{}'.format(run_id)].value
+		charm_weight = charm_ipT*FONLL(charm_ipT)
+		quark_gp.attrs.create('Wtot', charm_weight.sum())
 
-		# read final particle data
+		# read final particle data	
 		ID, charge, fmass, px, py, pz, y, eta, ipT, iw = (
 			np.array(col, dtype=dtype) for (col, dtype) in
 			zip(
@@ -254,7 +258,6 @@ def main():
 		abs_ID = np.abs(ID)
 		midrapidity = (np.fabs(y) < .5)
 		soft_index = [iID not in HQ_id for iID in abs_ID]
-
 			
 		# for soft particles
 		soft_gp.attrs.create('dNch_deta',
@@ -274,7 +277,7 @@ def main():
 			cut = (abs_ID == isp) & Raa_eta_cut
 			HQpT, HQw = pT[cut], ipT[cut]*FONLL(ipT[cut])
 			Hist, BinEdges = np.histogram(HQpT, bins=NpT, range=[pTlow, pThigh], normed=True, weights=HQw)
-			specie_gp.create_dataset('dN_dpt2_Ntot', data=Hist, dtype=float_t) 
+			specie_gp.create_dataset('dN_dpt2_Ntot', data=Hist/pTmid, dtype=float_t) 
 			specie_gp.attrs.create('Ntot', HQw.sum(), dtype=float_t)
 
 			# calculate Qn
