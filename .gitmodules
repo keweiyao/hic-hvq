@@ -13,12 +13,9 @@
 [submodule "vishnew"]
 	path = models/vishnew
 	url = https://github.com/keweiyao/vishnew.git
-[submodule "trento"]
-	path = models/trento
-	url = https://github.com/Duke-QCD/trento.git
 [submodule "models/frzout"]
 	path = models/frzout
-	url = https://github.com/jbernhard/frzout.git
+	url = https://github.com/keweiyao/frzout.git
 [submodule "models/freestream"]
 	path = models/freestream
 	url = https://github.com/Duke-QCD/freestream.git
