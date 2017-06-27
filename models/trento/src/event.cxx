@@ -137,7 +137,7 @@ void Event::accumulate_TAB(Nucleon& A, Nucleon& B, NucleonProfile& profile){
       for (auto ix = ixmin; ix <= ixmax; ++ix) {
         double dxsqA = std::pow(xA - (static_cast<double>(ix)+.5)*dxy_, 2);
 		double dxsqB = std::pow(xB - (static_cast<double>(ix)+.5)*dxy_, 2);
-        TAB_[iy][ix] += profile.thickness(dxsqA + dysqA)*profile.thickness(dxsqB + dysqB)/TAAnorm*A.get_gamma()*B.get_gamma();
+        TAB_[iy][ix] += profile.thickness(dxsqA + dysqA)*profile.thickness(dxsqB + dysqB)/TAAnorm;
       }
     }
 }

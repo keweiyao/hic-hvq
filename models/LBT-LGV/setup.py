@@ -49,13 +49,14 @@ modules = [
                          libraries=["m", "gsl", "gslcblas", "boost_filesystem", "hdf5", "hdf5_cpp"]),
 ]
 
-data = ('/share/hvq/tables/', 
-	[fn for fn in glob('./HQ-Evo/tables/*.hdf5')] )
-spectra = ('/share/hvq/',
-        [fn for fn in glob('./Event/FONLL/*/*.dat')] )
+data = [ ('/share/hvq/tables/', [fn for fn in glob('./HQ-Evo/tables/*.hdf5')] ),
+         ('/share/hvq/2760GeV/', [fn for fn in glob('./Event/FONLL/2760GeV/*.dat')] ),
+	 ('/share/hvq/5020GeV/', [fn for fn in glob('./Event/FONLL/5020GeV/*.dat')] ),
+         ('/share/hvq/7000GeV/', [fn for fn in glob('./Event/FONLL/7000GeV/*.dat')] )
+       ]
 setup(
         ext_modules=cythonize(modules),
-	data_files=[data, spectra]
+	data_files=data
 )
 
 

@@ -59,9 +59,9 @@ def main():
     init_config =  { 'type'  : 'A+B',
                      'sample power'  : 1.,
                      'pTmin'         : 0.1,
-                     'pTmax'         : 70.,
-                     'ymin'          : float(config.get('ymin', -1.)),
-                     'ymax'          : float(config.get('ymax', 1.)),
+                     'pTmax'         : 100.,
+                     'ymin'          : float(config.get('ymin', -2.)),
+                     'ymax'          : float(config.get('ymax', 2.)),
                      'TAB'           : TAB,
                      'dxy'           : dx   }
     total_TAB = np.sum(TAB)*dx*dx

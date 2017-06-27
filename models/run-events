@@ -1,35 +1,5 @@
 #!/usr/bin/env python3
 
-"""
-Runs several complete heavy-ion collision events:
-
-  - initial condition (trento)
-  - free streaming
-  - hydro (vishnew)
-  - particlization / sampler (frzout)
-  - hadronic afterburner (urqmd)
-
-If an argument is passed, it is read as a configuration file with simple
-key = value syntax and stored in the 'config' dict.  Values are then accessed
-with 'config.get()' and hence all have reasonable defaults.
-
-For each event, computes observables (multiplicities, mean transverse momenta,
-flow vectors, etc) and saves them in raw binary file 'results', which may be
-read by np.fromfile() using the same dtype as the 'results' array.
-
-Some advantages of this format:
-
-  - speed and file size (zero overhead)
-  - files may be concatened together
-  - easy I/O in numpy (fromfile/tofile)
-
-A disadvantage:
-
-  - no metadata is saved, so the precise data type must be known and fully
-	specified or the files are nonsense
-
-"""
-
 from itertools import chain
 import sys
 import subprocess
@@ -84,7 +54,7 @@ def main():
 	print ('==========',run_id, '=============')
 	nevents = 1
 	grid_step = 0.1
-	grid_max = 13.05
+	grid_max = 15.05
 
 	# run trento and yield initial entropy density arrays
 	def initial_conditions(initial_file='initial.hdf'):
@@ -99,23 +69,42 @@ def main():
 				if dset.name[1:4] != 'TAB':
 					yield [np.array(dset), np.array(f['TAB'+dset.name[-2:]])]
 
-	#==================FONLL========================================
-	x0, y0 = np.loadtxt('./hic-hvq/share/hvq/PbPb-dX-dpT2-dy.dat').T
-	FONLL = interp1d(x0, y0, fill_value='extrapolate')
-	
-	#==================Hard pT bins=================================
+	#==================Hard pT bins and exp cuts=================================
 	pTlow = 0.
 	pThigh = 50.
 	NpT = 50
 	pTbins = np.linspace(pTlow, pThigh, NpT+1)
 	pTmid = (pTbins[:-1] + pTbins[1:])/2.
+	exp_name = config.get('collaboration', 'something else')
+	sqrts = config.get('sqrts', '2760')
+	print ('exp : ', exp_name)
+	print ('sqrts :', sqrts, " GeV")
+	if exp_name == "CMS":
+		print('use CMS cuts')
+		exp_Raa_ycut = 1.0
+		exp_vn_ycut = 1.0
+	elif exp_name == "ALICE":
+		print('use ALICE cuts')
+		exp_Raa_ycut = 0.5
+		exp_vn_ycut = 0.8
+	elif exp_name == "STAR":
+		exp_Raa_ycut = 1.0
+		exp_vn_ycut = 1.0
+	else:
+		print('use large cuts')
+		exp_Raa_ycut = 2.0
+		exp_vn_ycut = 2.0
+	#==================FONLL========================================
+	x0, y0 = np.loadtxt('./hic-hvq/share/hvq/{}GeV/PbPb-dX-dpT2-dy.dat'.format(sqrts)).T
+	FONLL = interp1d(x0, y0, fill_value='extrapolate')
+	print("Xtot: PbPb-->charm, ", np.sum(x0*y0)*(x0[1]-x0[0]))
 
 	# read free streaming time and enable for time > epsilon
 	tau_fs = float(config.get('tau_fs', 0))
 	enable_fs = tau_fs > 1e-6
 
 	# create sampler HRG object (to be reused for all events)
-	Tswitch = float(config.get('Tswitch', .15))
+	Tswitch = float(config.get('Tswitch', .154))
 	hrg = frzout.HRG(Tswitch, species='urqmd', res_width=True)
 	eswitch = hrg.energy_density()
 
@@ -136,9 +125,12 @@ def main():
 
 	# Heavy quark species (name, ID)
 	HQ_species = [
-		('D0', 421), ('D+', 411),
-		('D*+', 10411),
-	  #  ('Ds+', 431), ('Ds*+', 433), ('D0*', 10421), 
+		 ('D+', 411), 
+		 ('D0', 421),
+		 ('D*+', 10411),
+		 ('D0*', 10421), 
+		 ('Ds+', 431), 
+		 ('Ds*+', 433)
 	]
 	HQ_id = [s[1] for s in HQ_species]	
 
@@ -155,8 +147,8 @@ def main():
 		hard_gp = event_gp.create_group('hard')
 		quark_gp = hard_gp.create_group('quark')
 		meson_gp = hard_gp.create_group('meson')
-		w_urqmd_qp = meson_gp.create_group('w_urqmd')
-		wo_urqmd_qp = meson_gp.create_group('wo_urqmd')
+		w_urqmd_gp = meson_gp.create_group('w_urqmd')
+		wo_urqmd_gp = meson_gp.create_group('wo_urqmd')
 		soft_gp.attrs.create('initial_entropy', grid_step**2 * ic[0].sum())
 		hard_gp.attrs.create('T_AB', grid_step**2 * ic[1].sum())
 		hard_gp.attrs.create('pT_low', pTlow)
@@ -205,10 +197,10 @@ def main():
 		pi = dict(zip(['xx', 'xy', 'yy'], surface_data.T[11:14]))
 		Pi = surface_data.T[15]
 		# create sampler surface object
-		surface = frzout.Surface(x, sigma, v, pi=pi, Pi=Pi, ymax=4)
+		surface = frzout.Surface(x, sigma, v, pi=pi, Pi=Pi, ymax=2.)
 
 		minsamples, maxsamples = 10, 100  # reasonable range for nsamples
-		minparts = 10**5  # min number of particles to sample
+		minparts = 20000  # min number of particles to sample
 		nparts = 0  # for tracking total number of sampled particles
 
 		# sample soft particles and write to file
@@ -237,11 +229,81 @@ def main():
 		run_cmd('afterburner {} particles_out_{}.dat particles_in.dat h-meson-final-{}.dat'.format(nsamples, run_id, run_id))
 
 		# ==================Data Processing==================================
-		# For initial charm
-		fcharm = h5py.File('./HeavyFlavorResult.hdf5', 'r')
-		charm_ipT = fcharm['quark-pT0-{}'.format(run_id)].value
-		charm_weight = charm_ipT*FONLL(charm_ipT)
-		quark_gp.attrs.create('Wtot', charm_weight.sum())
+		
+		# ----Function to calculate Raa and v2-------------------------------
+		def get_Raa(pid, pT, y, ipT, yabs_cut, species):
+			# calculate pT-spectra for each species
+			Raa = {}
+			for (Dname, Did) in species:
+				cut = (np.abs(y) < yabs_cut) & (pid == Did)
+				HQpT, HQw = pT[cut], ipT[cut]*FONLL(ipT[cut])
+				Hist, BinEdges = np.histogram(HQpT, bins=NpT, range=[pTlow, pThigh], normed=True, weights=HQw)
+				Raa.update({Dname : {'shape' : Hist, 'Ntot' : HQw.sum()} })
+			return Raa
+		def get_vn(pid, phi, pT, y, ipT, yabs_cut, species):
+			# calculate Qn
+			vn = {}
+			for (Dname, Did) in species:
+				cut = (np.abs(y) < yabs_cut) & (pid == Did)
+				HQphi, HQpT, HQw = phi[cut], pT[cut], ipT[cut]*FONLL(ipT[cut])
+				Qn_array = np.zeros([NpT, 3], dtype=complex_t)
+				M_array = np.zeros(NpT)
+				for icut, [pl, ph] in enumerate(zip(pTbins[:-1], pTbins[1:])):
+					pTcut = (pl < HQpT) & (HQpT <= ph)
+					diff_phi = HQphi[pTcut]
+					diff_w = HQw[pTcut]
+					Qn_array[icut] = np.array([(np.exp(1j*n*diff_phi)*diff_w).sum() for n in range(1, 4)], dtype=complex_t)
+					M_array[icut] = diff_w.sum()
+				vn.update({Dname : {'Qn' : Qn_array, 'M' : M_array} })
+			return vn
+				
+		# For final charm quark
+		fquark = h5py.File('./HeavyFlavorResult.hdf5', 'r')
+		ipT = fquark['quark-pT0-{}'.format(run_id)].value
+		px, py, pz, E = fquark['quark-pv-{}'.format(run_id)].value.T
+		pid = fquark['quark-pid-{}'.format(run_id)].value
+		fquark.close()
+		y = 0.5*np.log((E+pz)/(E-pz))
+		pT = np.sqrt(px**2 + py**2)
+		phi = np.arctan2(py, px)
+		species = [('charm', 4)]
+		
+		Raa = get_Raa(pid=pid, pT=pT, y=y, ipT=ipT, yabs_cut=10., species=species)
+		vn = get_vn(pid=pid, phi=phi, pT=pT, y=y, ipT=ipT, yabs_cut=10., species=species)
+		dndpt_gp = quark_gp.create_group('dN_dpt')
+		vn_gp = quark_gp.create_group('vn')
+		for (Cname, Cid) in species:
+			dn_i_dpt_gp = dndpt_gp.create_group(Cname)
+			dn_i_dpt_gp.create_dataset('shape', data=Raa[Cname]['shape'], dtype=float_t)
+			dn_i_dpt_gp.attrs.create('Ntot', Raa[Cname]['Ntot']*exp_Raa_ycut/2., dtype=float_t)
+			
+			vn_i_gp = vn_gp.create_group(Cname)
+			vn_i_gp.create_dataset('Qn', data=vn[Cname]['Qn'], dtype=complex_t)
+			vn_i_gp.create_dataset('M', data=vn[Cname]['M'], dtype=float_t)
+
+		# for heavy flavor before urqmd
+		fmeson = h5py.File('./HeavyFlavorResult.hdf5', 'r')
+		ipT = fmeson['meson-pT0-{}'.format(run_id)].value
+		px, py, pz, E = fmeson['meson-pv-{}'.format(run_id)].value.T
+		pid = fmeson['meson-pid-{}'.format(run_id)].value
+		fmeson.close()
+		y = 0.5*np.log((E+pz)/(E-pz))
+		pT = np.sqrt(px**2 + py**2)
+		phi = np.arctan2(py, px)
+		species = [('D+', 411), ('D0', 421), ('D*+', 413), ('D*0', 423)]
+		
+		Raa = get_Raa(pid=pid, pT=pT, y=y, ipT=ipT, yabs_cut=exp_Raa_ycut, species=species)
+		vn = get_vn(pid=pid, phi=phi, pT=pT, y=y, ipT=ipT, yabs_cut=exp_vn_ycut, species=species)
+		dndpt_gp = wo_urqmd_gp.create_group('dN_dpt')
+		vn_gp = wo_urqmd_gp.create_group('vn')
+		for (Dname, Did) in species:
+			dn_i_dpt_gp = dndpt_gp.create_group(Dname)
+			dn_i_dpt_gp.create_dataset('shape', data=Raa[Dname]['shape'], dtype=float_t)
+			dn_i_dpt_gp.attrs.create('Ntot', Raa[Dname]['Ntot'], dtype=float_t)
+			
+			vn_i_gp = vn_gp.create_group(Dname)
+			vn_i_gp.create_dataset('Qn', data=vn[Dname]['Qn'], dtype=complex_t)
+			vn_i_gp.create_dataset('M', data=vn[Dname]['M'], dtype=float_t)
 
 		# read final particle data	
 		ID, charge, fmass, px, py, pz, y, eta, ipT, iw = (
@@ -257,8 +319,9 @@ def main():
 		abs_eta = np.fabs(eta)
 		abs_ID = np.abs(ID)
 		midrapidity = (np.fabs(y) < .5)
-		soft_index = [iID not in HQ_id for iID in abs_ID]
-			
+		soft_index = np.array([iID not in HQ_id for iID in abs_ID])
+		hard_index = np.array([iID in HQ_id for iID in abs_ID])
+
 		# for soft particles
 		soft_gp.attrs.create('dNch_deta',
 			np.count_nonzero(charged & (abs_eta < .5) & soft_index) / nsamples)
@@ -267,33 +330,27 @@ def main():
 		phi_alice = phi[charged & (abs_eta < .8) & (.2 < pT) & (pT < 5.)]
 		soft_gp.attrs.create('M', phi_alice.size, dtype=int_t)
 		soft_gp.create_dataset('Qn', data=np.array([np.exp(1j*n*phi_alice).sum() for n in range(1, 7)]), dtype=complex_t)
-
-		# for heavy flavor after urqmd
-		Raa_eta_cut = (np.fabs(y) < .5)
-		v2_eta_cut = (np.fabs(y) < .8)
-		for name, isp in HQ_species:
-			specie_gp = w_urqmd_qp.create_group(name)
-			# calculate pT-spectra
-			cut = (abs_ID == isp) & Raa_eta_cut
-			HQpT, HQw = pT[cut], ipT[cut]*FONLL(ipT[cut])
-			Hist, BinEdges = np.histogram(HQpT, bins=NpT, range=[pTlow, pThigh], normed=True, weights=HQw)
-			specie_gp.create_dataset('dN_dpt2_Ntot', data=Hist/pTmid, dtype=float_t) 
-			specie_gp.attrs.create('Ntot', HQw.sum(), dtype=float_t)
-
-			# calculate Qn
-			cut = (abs_ID == isp) & v2_eta_cut
-			HQphi, HQpT, HQw = phi[cut], pT[cut], ipT[cut]*FONLL(ipT[cut])
-			Qn_array = np.zeros([NpT, 3], dtype=complex_t)
-			M_array = np.zeros(NpT)
-			for icut, [pl, ph] in enumerate(zip(pTbins[:-1], pTbins[1:])):
-				pTcut = (pl < HQpT) & (HQpT <= ph)
-				diff_phi = HQphi[pTcut]
-				diff_w = HQw[pTcut]
-				Qn_array[icut] = np.array([(np.exp(1j*n*diff_phi)*diff_w).sum() for n in range(1, 4)], dtype=complex_t)
-				M_array[icut] = diff_w.sum()
-			specie_gp.create_dataset('Qn', data=Qn_array, dtype=complex_t)
-			specie_gp.create_dataset('M', data=M_array, dtype=float_t)
-
+		
+		# HF after Urqmd
+		pid = abs_ID[hard_index]
+		pT = pT[hard_index]
+		y = y[hard_index]
+		phi = phi[hard_index]
+		ipT = ipT[hard_index]
+		species = [('D+', 411), ('D0', 421), ('D*+', 10411)]
+		Raa = get_Raa(pid=pid, pT=pT, y=y, ipT=ipT, yabs_cut=exp_Raa_ycut, species=species)
+		vn = get_vn(pid=pid, phi=phi, pT=pT, y=y, ipT=ipT, yabs_cut=exp_vn_ycut, species=species)
+		dndpt_gp = w_urqmd_gp.create_group('dN_dpt')
+		vn_gp = w_urqmd_gp.create_group('vn')
+		for (Dname, Did) in species:
+			dn_i_dpt_gp = dndpt_gp.create_group(Dname)
+			dn_i_dpt_gp.create_dataset('shape', data=Raa[Dname]['shape'], dtype=float_t)
+			dn_i_dpt_gp.attrs.create('Ntot', Raa[Dname]['Ntot'], dtype=float_t)
+			
+			vn_i_gp = vn_gp.create_group(Dname)
+			vn_i_gp.create_dataset('Qn', data=vn[Dname]['Qn'], dtype=complex_t)
+			vn_i_gp.create_dataset('M', data=vn[Dname]['M'], dtype=float_t)
+			
 	fresult.close()
 
 

@@ -109,4 +109,4 @@ done
 echo 'done'
 
 # go!
-condor_submit_dag -maxidle 1000 dag
+condor_submit_dag -maxidle 500 dag
