@@ -50,9 +50,7 @@ modules = [
 ]
 
 data = [ ('/share/hvq/tables/', [fn for fn in glob('./HQ-Evo/tables/*.hdf5')] ),
-         ('/share/hvq/2760GeV/', [fn for fn in glob('./Event/FONLL/2760GeV/*.dat')] ),
-	 ('/share/hvq/5020GeV/', [fn for fn in glob('./Event/FONLL/5020GeV/*.dat')] ),
-         ('/share/hvq/7000GeV/', [fn for fn in glob('./Event/FONLL/7000GeV/*.dat')] )
+         ('/share/hvq/lhc/', [fn for fn in glob('./FONLL-pt-y/*.hdf5')] ),
        ]
 setup(
         ext_modules=cythonize(modules),

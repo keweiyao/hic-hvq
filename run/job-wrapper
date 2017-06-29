@@ -9,8 +9,8 @@ eventperjob=4
 desturl=$2
 
 # load necessary modules
-source /cvmfs/oasis.opensciencegrid.org/osg/modules/lmod/current/init/bash
-module load python/3.5.2 all-pkgs gcc/6.2.0 boost/1.62.0 hdf5/1.8.13 gsl/2.3 || exit 1
+#source /cvmfs/oasis.opensciencegrid.org/osg/modules/lmod/current/init/bash
+#module load python/3.5.2 all-pkgs gcc/6.2.0 boost/1.62.0 hdf5/1.8.13 gsl/2.3 || exit 1
 
 # unpack package
 export pkgname='hic-hvq'
@@ -20,7 +20,7 @@ tar xzf $pkgname.tar.gz
 prefix="$(pwd)/$pkgname"
 export PATH="$prefix/bin:$PATH"
 export XDG_DATA_HOME="$prefix/share"
-export PYTHONPATH="$(echo $prefix/lib/python*/site-packages)"
+export PYTHONPATH="$(echo $prefix/lib/python*/site-packages)":"$(echo $prefix/lib64/python*/site-packages)"
 #:"$(echo $prefix/lib64/python*/site-packages)"
 echo $PYTHONPATH
 # go!
