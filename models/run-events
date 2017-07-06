@@ -10,8 +10,56 @@ import h5py
 import freestream
 import frzout
 
-from scipy.interpolate import interp2d
+def FONLL_spectra(filename, nuA='Pb', nuB='Pb', sqrts=2760, mass=1.3):
+	f = h5py.File(filename, 'r')
+	ds = f['{}-{}-{}'.format(sqrts, nuA, nuB)]
+	b1 = ds['b1'].value
+	b2 = ds['b2'].value
+	normy = np.linspace(-1,1,13)
+	pT = ds['pT'].value
+	dsigma = ds['dsigma_bdb_dpT2_dy'].value*pT
+	f.close()
 
+	dnormy = normy[1]-normy[0]
+	pTmin, pTmax, pTmid = pT[0], pT[-1], pT[29]
+	dpT1, dpT2 = pT[1]-pT[0], pT[-1] - pT[-2]
+	bmin, bmax, db = b1[0], b1[-1], b1[1]-b1[0]
+	def interp(b1i, b2i, yi, pTi):
+		mT = np.sqrt(pTi**2 + mass**2)
+		normyi = yi/np.arccosh(sqrts/2./mT)
+		index_b1 = int((b1i-bmin)/db)
+		index_b2 = int((b2i-bmin)/db)
+		index_normy = int((normyi+1.)/dnormy)
+		A1 = np.max([np.min([15, index_b1]), 0])
+		A2 = np.max([np.min([15, index_b2]), 0])
+		A3 = np.max([np.min([11, index_normy]), 0])
+		rx1 = (b1i-b1[A1])/db
+		rx2 = (b2i-b2[A2])/db
+		rx3 = (normyi-normy[A3])/dnormy
+		if pTi < pTmid:
+			index_pT = int((pTi - pTmin)/dpT1)
+			A4 = np.max([np.min([28, index_pT]), 0])
+			rx4 = (pTi-pT[A4])/dpT1
+		else:
+			index_pT = int((pTi - pTmid)/dpT2) + 29
+			A4 = np.max([np.min([58, index_pT]), 29])
+			rx4 = (pTi-pT[A4])/dpT2
+
+		resultA = 0.0
+		ra1 = [1.-rx1, rx1]
+		ra2 = [1.-rx2, rx2]
+		ra3 = [1.-rx3, rx3]
+		ra4 = [1.-rx4, rx4]
+		for i1 in range(2):
+			for i2 in range(2):
+				for i3 in range(2):
+					for i4 in range(2):
+						resultA += dsigma[A1+i1, A2+i2, A3+i3, A4+i4] \
+									*ra1[i1]*ra2[i2]*ra3[i3]*ra4[i4]
+		return resultA
+	interp = np.vectorize(interp)
+	return interp
+					
 
 def run_cmd(*args, **kwargs):
 	"""
@@ -94,46 +142,6 @@ def main():
 		print('use large cuts')
 		exp_Raa_ycut = 2.0
 		exp_vn_ycut = 2.0
-	#=======================interpolate FONLL dN/dpt(y, pt)==================
-	def FONLL_spectra(nuA='Pb', nuB='Pb', sqrts=2760, IPtype='avg'):
-		f = h5py.File('./hic-hvq/share/hvq/lhc/lhc-{}{}-{}.hdf5'.format(nuA, nuB, IPtype), 'r')
-		ds = f['{}-{}-{}-{}'.format(sqrts, nuA, nuB, IPtype)]
-		pT = ds['pT'].value
-		y = ds['y'].value
-		N = ds['dsigma_dpT2_dy'].value*pT
-		f.close()
-
-		dNdpTdy = np.zeros([y.shape[0]*2-1, pT.shape[0]])
-		dNdpTdy[:y.shape[0]] = N[::-1]
-		dNdpTdy[y.shape[0]:] = N[1:]
-		y = np.concatenate([-y[::-1], y[1:]])
-		pTmin = pT[0]
-		pTmid = pT[49]
-		pTmax = pT[-1]
-		dpT1 = pT[1]-pT[0]
-		dpT2 = pT[-1]-pT[-2]
-		def interp(yi, pTi):
-			if yi < y[0]:
-				yi = y[0]
-			if yi > y[-1]:
-				yi = y[-1]
-			index_y = int((yi - y[0])/(y[1]-y[0]))
-			if pTi < pTmin:
-				pTi = pTmin
-			if pTi > pTmax:
-				pTi = pTmax
-
-			if pTi < pTmid:
-				index_pT = int((pTi - pTmin)/dpT1)
-			else:
-				index_pT = int((pTi - pTmid)/dpT2) + 50
-			index_y = np.max([np.min([10,index_y]), 1])
-			index_pT = np.max([np.min([97,index_pT]), 1])
-			clip = dNdpTdy[index_y-1:index_y+3, index_pT-1:index_pT+3]
-			f = interp2d(y[index_y-1:index_y+3], pT[index_pT-1:index_pT+3], clip.T, kind='cubic', bounds_error=False)
-			return np.max([f(yi, pTi), 0.])
-		interp = np.vectorize(interp)
-		return interp
 
 	# read free streaming time and enable for time > epsilon
 	tau_fs = float(config.get('tau_fs', 0))
@@ -234,7 +242,7 @@ def main():
 		pi = dict(zip(['xx', 'xy', 'yy'], surface_data.T[11:14]))
 		Pi = surface_data.T[15]
 		# create sampler surface object
-		surface = frzout.Surface(x, sigma, v, pi=pi, Pi=Pi, ymax=2.)
+		surface = frzout.Surface(x, sigma, v, pi=pi, Pi=Pi, ymax=3.)
 
 		minsamples, maxsamples = 10, 100  # reasonable range for nsamples
 		minparts = 20000  # min number of particles to sample
@@ -266,30 +274,36 @@ def main():
 		run_cmd('afterburner {} particles_out_{}.dat particles_in.dat h-meson-final-{}.dat'.format(nsamples, run_id, run_id))
 
 		# ==================Data Processing==================================
-		FONLL = FONLL_spectra()
+		FONLL = FONLL_spectra("./hic-hvq/share/hvq/lhc/lhc-PbPb-b1-b2-y-pT.hdf5",
+							nuA='Pb', nuB='Pb', sqrts=2760, mass=mass)
+
 		def p4_to_pT_and_y(px, py, pz, E):
 			return np.sqrt(px**2+py**2), 0.5*np.log((E+pz)/(E-pz))
 		def p4_to_pT_phi_and_y(px, py, pz, E):
 			return np.sqrt(px**2+py**2), np.arctan2(py,px), 	\
 				0.5*np.log((E+pz)/(E-pz))
 		# ----Function to calculate Raa and v2-------------------------------
-		def get_Raa(pid, pT, y, pT0, y0, yabs_cut, species):
+		def get_Raa(pid, pT, y, 
+					pT0, y0, s1, s2, 
+					yabs_cut, species):
 			# calculate pT-spectra for each species
 			Raa = {}
 			for (Dname, Did) in species:
 				cut = (np.abs(y) < yabs_cut) & (pid == Did)
-				HQpT, HQw = pT[cut], FONLL(y0[cut], pT0[cut])
+				HQpT, HQw = pT[cut], FONLL(s1[cut], s2[cut], y0[cut], pT0[cut])
 				Hist, BinEdges = np.histogram(HQpT, bins=NpT, range=[pTlow, pThigh], normed=True, weights=HQw)
 				Raa.update({Dname : {'shape' : Hist, 'Ntot' : HQw.sum()} })
 			return Raa
 
-		def get_vn(pid, pT, y, pT0, y0, yabs_cut, species):
+		def get_vn(pid, pT, phi, y, 
+				   pT0, y0, s1, s2, 
+				   yabs_cut, species):
 			# calculate Qn
 			vn = {}
 			for (Dname, Did) in species:
 				cut = (np.abs(y) < yabs_cut) & (pid == Did)
 				HQphi, HQpT, HQw = \
-					phi[cut], pT[cut], FONLL(y0[cut], pT0[cut])
+					phi[cut], pT[cut], FONLL(s1[cut], s2[cut], y0[cut], pT0[cut])
 				Qn_array = np.zeros([NpT, 3], dtype=complex_t)
 				M_array = np.zeros(NpT)
 				for icut, [pl, ph] in enumerate(zip(pTbins[:-1], pTbins[1:])):
@@ -301,15 +315,44 @@ def main():
 				vn.update({Dname : {'Qn' : Qn_array, 'M' : M_array} })
 			return vn
 		
-		def calculate_and_save_HQ_obs(data_group, pid, pT, y, 
-									  pT0, y0, Raa_ycut, vn_ycut, species):
+		def get_vn_ep(pid, pT, phi, y, 
+					  pT0, y0, s1, s2,
+					  yabs_cut, Psi2, species):
+			# calculate Qn
+			vn = {}
+			for (Dname, Did) in species:
+				cut = (np.abs(y) < yabs_cut) & (pid == Did)
+				HQphi, HQpT, HQw = \
+					phi[cut], pT[cut], FONLL(s1[cut], s2[cut], y0[cut], pT0[cut])
+				Nin_array = np.zeros(NpT, dtype=float_t)
+				Nout_array = np.zeros(NpT, dtype=float_t)
+				for icut, [pl, ph] in enumerate(zip(pTbins[:-1], pTbins[1:])):
+					pTcut = (pl < HQpT) & (HQpT <= ph)
+					diff_phi = HQphi[pTcut]
+					diff_w = HQw[pTcut]
+					cut_in = (np.fabs(np.cos(diff_phi-Psi2)) > 1./np.sqrt(2.)) 
+					cut_out = (np.fabs(np.cos(diff_phi-Psi2)) < 1./np.sqrt(2.)) 
+					Nin_array[icut] = (diff_w[cut_in]).sum()
+					Nout_array[icut] = (diff_w[cut_out]).sum()
+				vn.update({Dname : {'Nin' : Nin_array, 'Nout' : Nout_array} })
+			return vn
+
+		def calculate_and_save_HQ_obs(data_group, 
+									  pid, pT, phi, y, 
+									  pT0, y0, s1, s2,
+									  Raa_ycut, vn_ycut, Psi2, species):
 			Raa = get_Raa(pid=pid, pT=pT, y=y, 
-					  pT0=pT0, y0=y0, yabs_cut=Raa_ycut, species=species)
-			vn = get_vn(pid=pid, pT=pT, y=y, 
-					pT0=pT0, y0=y0, yabs_cut=vn_ycut, species=species)
+					  	  pT0=pT0, y0=y0, s1=s1, s2=s2,
+						  yabs_cut=Raa_ycut, species=species)
+			vn = get_vn(pid=pid, pT=pT, phi=phi, y=y, 
+					    pT0=pT0, y0=y0, s1=s1, s2=s2,
+						yabs_cut=vn_ycut, species=species)
+			vn_ep = get_vn_ep(pid=pid, pT=pT, phi=phi, y=y, 
+						pT0=pT0, y0=y0, s1=s1, s2=s2,
+						yabs_cut=vn_ycut, Psi2=Psi2, species=species)
 			dndpt_gp = data_group.create_group('dN_dpt')
 			vn_gp = data_group.create_group('vn')
-
+			vn_ep_gp = data_group.create_group('vn_ep')
 			for (Cname, Cid) in species:
 				dn_i_dpt_gp = dndpt_gp.create_group(Cname)
 				dn_i_dpt_gp.create_dataset('shape', 
@@ -319,37 +362,17 @@ def main():
 				vn_i_gp = vn_gp.create_group(Cname)
 				vn_i_gp.create_dataset('Qn', data=vn[Cname]['Qn'], dtype=complex_t)
 				vn_i_gp.create_dataset('M', data=vn[Cname]['M'], dtype=float_t)
-		
-		# For final charm quark
-		fquark = h5py.File('./HeavyFlavorResult.hdf5', 'r')
-		pT0, y0 = p4_to_pT_and_y(*fquark['quark-p0-{}'.format(run_id)].value.T)
-		pT, phi, y = p4_to_pT_phi_and_y(
-								*fquark['quark-p-{}'.format(run_id)].value.T)
-		pid = fquark['quark-pid-{}'.format(run_id)].value
-		fquark.close()
-		species = [('charm', 4)]
-		calculate_and_save_HQ_obs(quark_gp, pid, pT, y, 
-								  pT0, y0, 10., 10., species)
 
-		# for heavy flavor before urqmd
-		fmeson = h5py.File('./HeavyFlavorResult.hdf5', 'r')
-		pT0, y0 = p4_to_pT_and_y(*fmeson['meson-p0-{}'.format(run_id)].value.T)
-		pT, phi, y = p4_to_pT_phi_and_y(
-								*fmeson['meson-p-{}'.format(run_id)].value.T)
-		pid = fmeson['meson-pid-{}'.format(run_id)].value
-		fmeson.close()
-		species = [('D+', 411), ('D0', 421), ('D*+', 413), ('D*0', 423)]
-		wo_urqmd_gp
-		calculate_and_save_HQ_obs(wo_urqmd_gp, pid, pT, y, 
-								  pT0, y0, exp_Raa_ycut, exp_vn_ycut, species)
-
+				vn_ep_i_gp = vn_ep_gp.create_group(Cname)
+				vn_ep_i_gp.create_dataset('Nin', data=vn_ep[Cname]['Nin'], dtype=float_t)
+				vn_ep_i_gp.create_dataset('Nout', data=vn_ep[Cname]['Nout'], dtype=float_t)
 
 		# read final particle data	
-		ID, charge, fmass, px, py, pz, y, eta, pT0, y0 = (
+		ID, charge, fmass, px, py, pz, y, eta, pT0, y0, s1, s2 = (
 			np.array(col, dtype=dtype) for (col, dtype) in
 			zip(
 				zip(*read_text_file('particles_out_{}.dat'.format(run_id))),
-				(2*[int] + 8*[float])
+				(2*[int] + 10*[float])
 			)
 		)
 		pT = np.sqrt(px**2+py**2)
@@ -360,7 +383,7 @@ def main():
 		soft_index = np.array([iID not in HQ_id for iID in abs_ID])
 		hard_index = np.array([iID in HQ_id for iID in abs_ID])
 
-		# for soft particles
+		#============for soft particles======================
 		soft_gp.attrs.create('dNch_deta',
 			np.count_nonzero(charged & (abs_eta < .5) & soft_index) / nsamples)
 		soft_gp.attrs.create('cen_mult',
@@ -369,7 +392,12 @@ def main():
 						 & (.2 < pT) & (pT < 5.) & soft_index]
 		soft_gp.attrs.create('M', phi_soft.shape[0], dtype=int_t)
 		soft_gp.create_dataset('Qn', data=np.array([np.exp(1j*n*phi_soft).sum() for n in range(1, 7)]), dtype=complex_t)
+
+		# Soft event plane:
+		phi_soft = phi[charged & (abs_eta < .8) & (.15 < pT) & soft_index]
+		Psi2_soft = np.arctan2(np.sin(2.*phi_soft).sum(), np.cos(2.*phi_soft).sum())
 		
+		#===========For heavy particles======================
 		# HF after Urqmd
 		pid = abs_ID[hard_index]
 		pT = pT[hard_index]
@@ -377,9 +405,46 @@ def main():
 		phi = phi[hard_index]
 		pT0 = pT0[hard_index]
 		y0 = y0[hard_index]	
+		s1 = s1[hard_index]
+		s2 = s2[hard_index]
 		species = [('D+', 411), ('D0', 421), ('D*+', 10411)]
-		calculate_and_save_HQ_obs(w_urqmd_gp, pid, pT, y, 
-								  pT0, y0, exp_Raa_ycut, exp_vn_ycut, species)
+		calculate_and_save_HQ_obs(w_urqmd_gp, 
+								  pid, pT, phi, y, 
+								  pT0, y0, s1, s2,
+								  exp_Raa_ycut, exp_vn_ycut, 
+								  Psi2_soft, species)
+
+		#---------For comparison----------------
+		# For final charm quark
+		fquark = h5py.File('./HeavyFlavorResult.hdf5', 'r')
+		pT0, y0 = p4_to_pT_and_y(*fquark['quark-p0-{}'.format(run_id)].value.T)
+		pT, phi, y = p4_to_pT_phi_and_y(
+								*fquark['quark-p-{}'.format(run_id)].value.T)
+		s1, s2 = fquark['quark-s1-s2-{}'.format(run_id)].value.T
+		pid = fquark['quark-pid-{}'.format(run_id)].value
+		fquark.close()
+		species = [('charm', 4)]
+		calculate_and_save_HQ_obs(quark_gp,
+								  pid, pT, phi, y, 
+								  pT0, y0, s1, s2,
+								  10., 10., 
+								  Psi2_soft, species)
+
+		# for heavy flavor before urqmd
+		fmeson = h5py.File('./HeavyFlavorResult.hdf5', 'r')
+		pT0, y0 = p4_to_pT_and_y(*fmeson['meson-p0-{}'.format(run_id)].value.T)
+		pT, phi, y = p4_to_pT_phi_and_y(
+								*fmeson['meson-p-{}'.format(run_id)].value.T)
+		s1, s2 = fmeson['meson-s1-s2-{}'.format(run_id)].value.T
+		pid = fmeson['meson-pid-{}'.format(run_id)].value
+		fmeson.close()
+		species = [('D+', 411), ('D0', 421), ('D*+', 413), ('D*0', 423)]
+		wo_urqmd_gp
+		calculate_and_save_HQ_obs(wo_urqmd_gp,
+								  pid, pT, phi, y, 
+								  pT0, y0, s1, s2,
+								  exp_Raa_ycut, exp_vn_ycut, 
+								  Psi2_soft, species)
 	fresult.close()
 
 

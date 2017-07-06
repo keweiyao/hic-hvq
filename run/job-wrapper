@@ -5,7 +5,7 @@ uname -nr
 
 # read arguments
 inputfile=$1
-eventperjob=4
+eventperjob=1
 desturl=$2
 
 # load necessary modules
