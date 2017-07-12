@@ -65,7 +65,7 @@ def main():
 				 }  
   
 
-	TAB = icfile['TAB_0'].value.T
+	TAB = icfile['TAB_0'].value
 	dx = icfile['event_0'].attrs['dx']
 	b = icfile['event_0'].attrs['b']
 	init_config =  { 'type'  : 'A+B',
