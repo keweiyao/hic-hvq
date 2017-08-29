@@ -65,11 +65,10 @@ def main():
 				 }  
   
 
-	TAB = icfile['TAB_0'].value
+	TAB = icfile['TAB_0'].value.T
 	dx = icfile['event_0'].attrs['dx']
 	b = icfile['event_0'].attrs['b']
 	init_config =  { 'type'  : 'A+B',
-					 'sample power' : 1.,
 					 'pTmin'		: 0.1,
 					 'pTmax'		: 100.,
 					 'ymin'		 	: float(config.get('ymin', -3.)),
@@ -82,8 +81,8 @@ def main():
 	
 	e1 = event.event(   medium_flags=dynamic_config , 
 						physics_flags=phy_config,
-						table_folder="{}/share/hvq/tables/".format(pkgname),
-						refresh_table=eva(config.get('new-table', 'False'))
+						table_folder="./tables/",
+						refresh_table=False
 					)
 
 	e1.initialize_HQ(   NQ=NQ,

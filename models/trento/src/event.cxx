@@ -130,14 +130,13 @@ void Event::accumulate_TAB(Nucleon& A, Nucleon& B, NucleonProfile& profile){
     int iymax = clip(static_cast<int>((y+r)/dxy_), 0, nsteps_-1);
 
     // Add profile to grid.
-	double TAAnorm = profile.overlap_norm((xA-xB)*(xA-xB) + (yA-yB)*(yA-yB));
     for (auto iy = iymin; iy <= iymax; ++iy) {
       double dysqA = std::pow(yA - (static_cast<double>(iy)+.5)*dxy_, 2);
 	  double dysqB = std::pow(yB - (static_cast<double>(iy)+.5)*dxy_, 2);
       for (auto ix = ixmin; ix <= ixmax; ++ix) {
         double dxsqA = std::pow(xA - (static_cast<double>(ix)+.5)*dxy_, 2);
 		double dxsqB = std::pow(xB - (static_cast<double>(ix)+.5)*dxy_, 2);
-        TAB_[iy][ix] += profile.thickness(dxsqA + dysqA)*profile.thickness(dxsqB + dysqB)/TAAnorm;
+        TAB_[iy][ix] += profile.thickness(dxsqA + dysqA)*profile.thickness(dxsqB + dysqB)*A.get_gamma()*B.get_gamma();
       }
     }
 }

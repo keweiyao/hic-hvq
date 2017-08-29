@@ -5,7 +5,6 @@ uname -nr
 
 # read arguments
 inputfile=$1
-eventperjob=4
 desturl=$2
 
 # load necessary modules
@@ -15,7 +14,7 @@ module load python/3.5.2 all-pkgs gcc/6.2.0 boost/1.62.0 hdf5/1.8.13 gsl/2.3 || 
 # unpack package
 export pkgname='hic-hvq'
 tar xzf $pkgname.tar.gz
-tar xzf $inputfile --strip-components 2
+
 # set environment variables
 prefix="$(pwd)/$pkgname"
 export PATH="$prefix/bin:$PATH"
@@ -25,26 +24,18 @@ export PYTHONPATH="$(echo $prefix/lib/python*/site-packages)"
 echo $PYTHONPATH
 # go!
 for i in `seq 1 $eventperjob`; do
-  # first clean the info from last run
-  if [[ -f initial.hdf ]]; then
-    rm initial.hdf
-  fi
-  if [[ -f JetData.h5 ]]; then
-    rm JetData.h5
-  fi
-  if [[ -f HeavyFlavorResult.hdf5 ]]; then
-    rm HeavyFlavorResult.hdf5
-  fi
   # run events
-  run-events config.cfg $i || exit 1
+  run-tables $inputfile || exit 1
 done
 
 # transfer results
 # try to be fault-tolerant
 globus() {
+  for f in ./tables/*.hdf5; do
      globus-url-copy \
     -verbose -create-dest -restart -stall-timeout 30 $@ \
-    results.hdf5 $desturl/results.hdf5   
+    $f $desturl/$f
+  done
 }
 
 for i in {1..5}; do

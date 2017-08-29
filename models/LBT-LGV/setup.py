@@ -13,7 +13,6 @@ for key, value in cfg_vars.items():
 
 
 #-------------HqEvo Module------------------
-#includes=['']
 libs=[path for path in os.environ['LD_LIBRARY_PATH'].split(':') if path]
 #-------------HqEvo Module------------------
 fileLBT = [     'cython/HqEvo.pyx',
@@ -36,16 +35,14 @@ modules = [
         Extension('HqEvo',
                          sources=fileLBT,
                          language="c++",
-#                        include_dirs=includes,
                          library_dirs=libs,
-                         extra_compile_args=["-std=c++11", '-fPIC'],
+                         extra_compile_args=["-std=c++11"],
                          libraries=["m", "gsl", "gslcblas", "boost_filesystem", "hdf5", "hdf5_cpp"]),
                 Extension('HqLGV',
                          sources=fileLGV,
                          language="c++",
-#                        include_dirs=includes,
                          library_dirs=libs,
-                         extra_compile_args=["-std=c++11", '-fPIC'],
+                         extra_compile_args=["-std=c++11"],
                          libraries=["m", "gsl", "gslcblas", "boost_filesystem", "hdf5", "hdf5_cpp"]),
 ]
 

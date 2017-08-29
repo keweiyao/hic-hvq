@@ -5,8 +5,8 @@ if ! voms-proxy-info -exists -hours 10 2> /dev/null; then
   exit 1
 fi
 
-if (( $# < 3 )); then
-  echo "usage: $0 batch_label jobs_per_input_file input_files..."
+if (( $# < 2 )); then
+  echo "usage: $0 batch_label input_files..."
   exit 1
 fi
 
@@ -14,8 +14,7 @@ nukeuser=wk42
 
 # parse arguments
 batchlabel=$1
-jobsperinput=$2
-inputfiles=${@:3}
+inputfiles=${@:2}
 echo $inputfiles
 # every batch needs a unique ID -- a timestamp works well
 timestamp="$(date --utc +%Y%m%d_%H%M%S)"
@@ -45,7 +44,7 @@ pkgfile='hic-hvq.tar.gz'
 ./makepkg $scratchdir
 
 # copy condor executable to scratch
-exefile='job-wrapper'
+exefile='job-wrapper-table'
 cp -v run/$exefile $scratchdir
 
 cd $scratchdir
@@ -79,7 +78,7 @@ job_machine_attrs_history_length = $histlen
 requirements = $requirements
 
 request_memory = 500M
-request_disk = 1.5G
+request_disk = 1.0G
 rank = KFlops
 
 executable = $exefile
@@ -103,10 +102,9 @@ EOF
 # would be submitted at once.  Throttling with the -maxidle option prevents
 # overloading.
 echo -n 'writing dag file...'
-for n in $(seq -w 0 $(( jobsperinput - 1 ))); do
-  echo "JOB $n job" >> $scratchdir/dag
-done
+
+echo "JOB 0 job" >> $scratchdir/dag
 echo 'done'
 
 # go!
-condor_submit_dag -maxidle 500 dag
+condor_submit_dag -maxidle 1000 dag

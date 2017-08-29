@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+
+import numpy as np
+import h5py
+import subprocess
+import sys
+import os
+import HqEvo
+from ast import literal_eval as eva
+
+def main():
+	# parse config file
+	with open(sys.argv[1], 'r') as f:
+		config = dict( (i.strip() for i in l.split('=', maxsplit=1)) \
+							   for l in f if l[0] != '#')
+
+	#echo config:
+	for key, val in config.items():
+		print('{} = {}'.format(key, val))
+
+	if config.get('hvq-mode', 'LBT') == 'LBT':
+		trans_options = {'name' : 'LBT', 
+				   '2->2' : eva(config.get('c22', 'True')),
+				   '2->3' : eva(config.get('c23', 'False')),
+				   '3->2' : eva(config.get('c32', 'False')),		
+				   'lambda_rescale' : float(config.get('Lambda', 1.0))
+					   }
+	else:
+		trans_options = {'name'		: 'LGV',
+				'dt_lrf'   : float(config.get('dt-lrf', 0.1)),
+				 'elastic'  : eva(config.get('elastic-lgv', 'True')),				
+				 'Einstein' : eva(config.get('ER', 'True'))
+					   } 
+
+	phy_config = {  'transport' : trans_options,
+			'Nf'	  : 3,
+			'Tc'	  : float(config.get('Tc', 0.154)),
+			'mD' 	  : {'mD-model' : int(config.get('mD-model', 0)),
+					'mTc'  : float(config.get('mD-Tc', 0.5)),
+					 'slope': float(config.get('mD-slope', 1.0)),
+					 'curv' : float(config.get('mD-curv', 0.0))
+									},
+			'mass'	: float(config.get('mass', 1.3)),			
+			'Kfactor' : float(config.get('K', 1.0)),
+			 }  
+  
+
+	HqEvo.HqEvo(options=phy_config,
+			    table_folder="./tables/",
+      			    refresh_table=True
+					)
+
+if __name__ == '__main__':
+	main()
+
+
+

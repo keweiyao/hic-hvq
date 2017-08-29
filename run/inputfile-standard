@@ -2,7 +2,7 @@
 collaboration = ALICE
 sqrts = 2760
 #-----------medium config-----------
-trento_args = -x 6.4 -n 14.4 -p 0.0 -k 1.1 -w 0.9 --b-min=8 --b-max=9
+trento_args = -x 6.4 -n 14.4 -p 0.0 -k 1.1 -w 0.9 
 tau_fs = 0.6
 vishnew_args = VisHRG=0.5 VisMin=0.06 VisSlope=2.0 VisCurv=0.05 VisBulkMax=0.015 VisBulkWidth=0.02
 Tswitch = 0.154
@@ -10,17 +10,17 @@ Tc = 0.154
 #-----------hvq config-----------
 new-table = True
 mass = 1.3
-N-hvq = 100000
+N-hvq = 40000
 #-----------Debye mass-----------
 # 0=self consistent debye mass, 1=parametrized debye mass
 mD-model = 1
-mD-Tc = 0.7
-mD-slope = 0.7
-mD-curv = 0.0
+mD-Tc = 5.0
+mD-slope = 0.5
+mD-curv = -1.0
 #-----------An example of LBT-----------
 hvq-mode = LBT
 c22 = True
-c23 = False
+c23 = True
 c32 = False
 K = 1.0
 Lambda = 1.0

@@ -1,0 +1,33 @@
+[submodule "Medium-Reader"]
+	path = models/LBT-LGV/Medium-Reader
+	url = https://github.com/keweiyao/Medium-Reader.git
+[submodule "Event"]
+	path = models/LBT-LGV/Event
+	url = https://github.com/keweiyao/Event.git
+[submodule "HQ-Evo"]
+	path = models/LBT-LGV/HQ-Evo
+	url = https://github.com/keweiyao/HQ-Evo.git
+[submodule "LB-doc"]
+	path = LB-doc
+	url = https://github.com/keweiyao/LB-doc.git
+[submodule "vishnew"]
+	path = models/vishnew
+	url = https://github.com/keweiyao/vishnew.git
+[submodule "models/frzout"]
+	path = models/frzout
+	url = https://github.com/keweiyao/frzout.git
+[submodule "models/freestream"]
+	path = models/freestream
+	url = https://github.com/Duke-QCD/freestream.git
+[submodule "models/hvq-hadronization"]
+	path = models/hvq-hadronization
+	url = https://github.com/keweiyao/hvq-hadronization.git
+[submodule "models/fortranformat"]
+	path = models/fortranformat
+	url = https://github.com/keweiyao/fortranformat.git
+[submodule "urqmd-afterburner"]
+	path = urqmd-afterburner
+	url = https://github.com/keweiyao/urqmd-afterburner.git
+[submodule "models/urqmd-afterburner"]
+	path = models/urqmd-afterburner
+	url = https://github.com/keweiyao/urqmd-afterburner.git
