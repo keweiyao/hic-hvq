@@ -8,6 +8,29 @@ import os
 import event
 from ast import literal_eval as eva
 import fortranformat as ff
+from multiprocessing import Pool, cpu_count
+from functools import partial
+
+def run(process_id, seed, dynamic_config, phy_config, init_config, NQ, run_id):
+	e1 = event.event(   medium_flags=dynamic_config ,
+                                                physics_flags=phy_config,
+                                                table_folder="./tables/",
+                                                refresh_table=False,
+						seed=seed
+                                        )
+
+	e1.initialize_HQ(   NQ=NQ,
+                            init_flags=init_config,
+			)
+
+	# Run Model
+	for i in range(500):
+		print ("t = %1.2f [fm/c]"%e1.sys_time())
+		status = e1.perform_hydro_step()
+		if not status:
+			break
+	e1.output_oscar('temp-{:d}.dat'.format(process_id))
+
 
 def main():
 	for s in sys.argv:
@@ -70,33 +93,39 @@ def main():
 	b = icfile['event_0'].attrs['b']
 	init_config =  { 'type'  : 'A+B',
 					 'pTmin'		: 0.1,
-					 'pTmax'		: 100.,
-					 'ymin'		 	: float(config.get('ymin', -3.)),
-					 'ymax'		 	: float(config.get('ymax', 3.)),
+					 'pTmax'		: 130.,
+					 'ymin'		 	: float(config.get('ymin', -2.)),
+					 'ymax'		 	: float(config.get('ymax', 2.)),
 					 'TAB'			: TAB,
 					 'dxy'		   	: dx,
 					 'b'			: b}
+	# parallel heavy quark evolutions
+	Nproc = np.min([cpu_count()-1 or 1, 10])
+	NQ = int(int(config.get('N-hvq', 50000))*1./Nproc)
+	with Pool(Nproc) as pool:
+		random_seed = list(np.random.randint(0, np.iinfo(np.uint32).max, size=Nproc))
+		pool.starmap(partial(run, dynamic_config=dynamic_config, 
+					phy_config=phy_config, init_config=init_config, 
+					NQ=NQ, run_id=run_id), zip(range(Nproc), random_seed) )
+	# output to oscar format
+	with open('hvq-final-{}.dat'.format(run_id), 'w') as f:
+		head3 = ff.FortranRecordWriter(
+                                '2(a8,2x),1x,i3,1x,i6,3x,i3,1x,i6,3x,a4,2x,e10.4,2x,i8')
+		f.write('OSC1997A\n')
+		f.write('final_id_p_x\n')
+		f.write(head3.write(['lbt', '1.0alpha', 208, 82, 208, 82, 'aacm', 1380, 1])+'\n')
+		eventhead = ff.FortranRecordWriter('i10,2x,i10,2x,f8.3,2x,f8.3,2x,i4,2x,i4,2X,i7')
+		f.write(eventhead.write([1, Nproc*NQ, 0.001, 0.001, 1, 1, 1])+'\n')
+		line = ff.FortranRecordWriter('i10,2x,i10,19(2x,d12.6)')
+		i = 0
+		line_in = ff.FortranRecordReader('i10,19(2x,d12.6)')
+		for process_id in range(Nproc):
+			with open("temp-{:d}.dat".format(process_id), 'r') as fi:
+				for l in fi:
+					p = line_in.read(l)
+					f.write(line.write([i, *p])+'\n')
+					i+=1
 
-	NQ = int(config.get('N-hvq', 50000))
-	
-	e1 = event.event(   medium_flags=dynamic_config , 
-						physics_flags=phy_config,
-						table_folder="./tables/",
-						refresh_table=False
-					)
-
-	e1.initialize_HQ(   NQ=NQ,
-						init_flags=init_config   )
-
-	# Run Model
-	for i in range(500):
-		print ("t = %1.2f [fm/c]"%e1.sys_time())
-		status = e1.perform_hydro_step()
-		if not status:
-			break
-	e1.output_oscar('./hvq-final-{}.dat'.format(run_id))
-
-	
 	# hadronization
 	os.environ["ftn20"] = "./h-meson-final-{}.dat".format(run_id)
 	os.environ["ftn30"] = "./{}/share/hvq-hadronization/parameters_hd.dat".format(pkgname)
@@ -104,16 +133,15 @@ def main():
 	os.environ["ftn50"] = "./{}/share/hvq-hadronization/recomb_c_BR1.dat".format(pkgname)
 	subprocess.run("hvq-hadronization", stdin=open('./hvq-final-{}.dat'.format(run_id)))
 
-	# save everything back in hdf5 format for God's sake ...
 	# reading back fortran format in python is too slow ...
-	line = ff.FortranRecordReader('i10,2x,i10,19(2x,d12.6)')
-	fh5 = h5py.File('HeavyFlavorResult.hdf5', 'a')
-	#n, id, px, py, pz, p0, M, x, y, z, t, T, vx, vy, vz, ipx, ipy, ipz, weight
 	pid = []
 	p = []
 	p0 = []
 	s1s2 = []
-	with open('./hvq-final-{}.dat'.format(run_id)) as f:
+	line = ff.FortranRecordReader('i10,2x,i10,19(2x,d12.6)')
+	fh5 = h5py.File('HeavyFlavorResult.hdf5', 'a')
+	#n, id, px, py, pz, p0, M, x, y, z, t, T, vx, vy, vz, ipx, ipy, ipz, weight
+	with open('./hvq-final-{}.dat'.format(run_id, process_id)) as f:
 		for i, l in enumerate(f):
 			if i>3:
 				ds = line.read(l)
@@ -130,6 +158,7 @@ def main():
 	p = []
 	p0 = []
 	s1s2 = []
+
 	with open('./h-meson-final-{}.dat'.format(run_id)) as f:
 		for i, l in enumerate(f):
 			if i>3:

@@ -46,8 +46,7 @@ modules = [
                          libraries=["m", "gsl", "gslcblas", "boost_filesystem", "hdf5", "hdf5_cpp"]),
 ]
 
-data = [ ('/share/hvq/tables/', [fn for fn in glob('./HQ-Evo/tables/*.hdf5')] ),
-         ('/share/hvq/lhc/', [fn for fn in glob('./FONLL-pt-y/*.hdf5')] ),
+data = [ ('/share/hvq/lhc/', [fn for fn in glob('./FONLL-pt-y/*.hdf5')] ),
        ]
 setup(
         ext_modules=cythonize(modules),
