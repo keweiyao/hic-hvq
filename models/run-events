@@ -6,102 +6,13 @@ import subprocess
 from multiprocessing import Pool, cpu_count
 
 import numpy as np
-import h5py
+import h5py, math
 
 import freestream
 import frzout
-
-def EPS09_spectra(fname, nuA, nuB, hvq, sqrts):
-	f = h5py.File(fname, 'r')
-	ds = f['{}-{}-{}-{}'.format(nuA, nuB, hvq, sqrts)]
-	M = ds.attrs['M']
-	bmin, db, bmax = ds.attrs['bm-db-bM']
-	ymax = ds['ymax'].value
-	pT = ds['pT'].value
-	pTmin, dpT = pT[0], pT[1]-pT[0]
-	dX_b1_b2_dy_dpT = np.nan_to_num(ds['dX_b1_b2_dy_dpT2'].value)*pT
-	Nb1, Nb2, Ny, NpT =  ds.attrs['dims']
-	dny = 2./(Ny-1.)
-	f.close()
-
-	def interp(b1, b2, y, pT):
-		mT = np.sqrt(pT**2 + M**2)
-		if 2*mT >= sqrts:
-			return 0.
-		ymax = np.arccosh(sqrts/2./mT)
-		if np.abs(y)>=ymax:
-			return 0.
-		ny = y/ymax
-		xb1 = (b1-bmin)/db
-		xb2 = (b2-bmin)/db
-		xny = (ny+1.)/dny
-		xpT = (pT - pTmin)/dpT
-		ib1 = int(np.floor(xb1))
-		ib2 = int(np.floor(xb2))
-		iny = int(np.floor(xny))
-		ipT = int(np.floor(xpT))
-		ib1 = np.max([np.min([Nb1-2, ib1]), 0])
-		ib2 = np.max([np.min([Nb2-2, ib2]), 0])
-		iny = np.max([np.min([Ny-2, iny]), 0])
-		ipT = np.max([np.min([NpT-2, ipT]), 0])
-		rx1 = xb1 - ib1
-		rx2 = xb2 - ib2
-		rx3 = xny - iny
-		rx4 = xpT - ipT
-		result = 0.0
-		ra1 = [1.-rx1, rx1]
-		ra2 = [1.-rx2, rx2]
-		ra3 = [1.-rx3, rx3]
-		ra4 = [1.-rx4, rx4]
-		for i1 in range(2):
-			for i2 in range(2):
-				for i3 in range(2):
-					for i4 in range(2):
-						result += dX_b1_b2_dy_dpT[ib1+i1, ib2+i2, \
-													  iny+i3, ipT+i4] \
-													*ra1[i1]*ra2[i2]*ra3[i3]*ra4[i4]
-		return result
-	interp = np.vectorize(interp)
-	return interp
-
-def nCTEQ_spectra(fname, nuA, nuB, hvq, sqrts):
-	f = h5py.File(fname, 'r')
-	ds = f['nCTEQ15np/{}-{}-{}-{}'.format(nuA, nuB, hvq, sqrts)]
-	M = ds.attrs['M']
-	ymax = ds['ymax'].value
-	pT = ds['pT'].value
-	pTmin, dpT = pT[0], pT[1]-pT[0]
-	dX_dy_dpT = np.nan_to_num(ds['dX_dy_dpT2'].value)*pT
-	Ny, NpT =  ds.attrs['dims']
-	dny = 2./(Ny-1.)
-	f.close()
-
-	def interp(y, pT):
-		mT = np.sqrt(pT**2 + M**2)
-		if 2*mT >= sqrts:
-			return 0.
-		ymax = np.arccosh(sqrts/2./mT)
-		if np.abs(y)>=ymax:
-			return 0.
-		ny = y/ymax
-		xny = (ny+1.)/dny
-		xpT = (pT - pTmin)/dpT
-		iny = int(np.floor(xny))
-		ipT = int(np.floor(xpT))
-		iny = np.max([np.min([Ny-2, iny]), 0])
-		ipT = np.max([np.min([NpT-2, ipT]), 0])
-		rx3 = xny - iny
-		rx4 = xpT - ipT
-		result = 0.0
-		ra3 = [1.-rx3, rx3]
-		ra4 = [1.-rx4, rx4]
-		for i3 in range(2):
-			for i4 in range(2):
-				result += dX_dy_dpT[iny+i3, ipT+i4] \
-						*ra3[i3]*ra4[i4]
-		return result
-	interp = np.vectorize(interp)
-	return interp			
+import fonll.fonll as fonll
+import JetCalc.LeadingParton as JLP
+from JetCalc.ExpCut import cuts as JEC
 
 def afterburner(Nstart, Nstop):
 	for index in range(Nstart, Nstop):
@@ -129,6 +40,80 @@ def read_text_file(filename):
 	with open(filename, 'rb') as f:
 		return [l.split() for l in f if not l.startswith(b'#')]
 
+def save_fs_history(ic, event_size, grid_step, tau_fs, xi, grid_max, steps=5, coarse=False):
+	f = h5py.File('FreeStream.h5')
+	dxy = grid_step*(coarse or 1)
+	ls = math.ceil(event_size/dxy)
+	n = 2*ls + 1
+	NX, NY = ic.shape
+	# roll ic by index 1 to match hydro
+	ic = np.roll(np.roll(ic, shift=-1, axis=0), shift=-1, axis=1)
+	tau0 = tau_fs*xi
+	taus = np.linspace(tau0, tau_fs, steps)
+	dtau = taus[1]-taus[0]
+	gp = f.create_group('Event')
+	gp.attrs.create('XL', [-ls])
+	gp.attrs.create('XH', [ls])
+	gp.attrs.create('YL', [-ls])
+	gp.attrs.create('YH', [ls])
+	gp.attrs.create('Tau0', [tau0])
+	gp.attrs.create('dTau', [dtau]) 
+	gp.attrs.create('DX', [dxy])
+	gp.attrs.create('DY', [dxy])
+	gp.attrs.create('NTau', [steps])
+	for itau, tau in enumerate(taus):
+		print(tau)
+		frame = gp.create_group('Frame_{:04d}'.format(itau))
+		fs = freestream.FreeStreamer(ic, grid_max, tau)
+		for fmt, data, arglist in [
+			('e', fs.energy_density, [()]),
+			('V{}', fs.flow_velocity, [(1,), (2,)]),
+			('Pi{}{}', fs.shear_tensor, [(0,0), (0,1), (0,2),
+												(1,1), (1,2),
+													   (2,2)] ),
+			]:
+			for a in arglist:
+				X = data(*a).T # to get the correct x-y with vishnew
+				if fmt == 'V{}':
+					X = X/data(0).T
+				if coarse:
+					X = X[::coarse, ::coarse]
+				diff = X.shape[0] - n
+				start = int(abs(diff)/2)
+
+				if diff > 0:
+					# original grid is larger -> cut out middle square
+					s = slice(start, start + n)
+					X = X[s, s]
+				elif diff < 0:
+					# original grid is smaller
+					#  -> create new array and place original grid in middle
+					Xn = np.zeros((n, n))
+					s = slice(start, start + X.shape[0])
+					Xn[s, s] = X
+					X = Xn
+				if fmt == 'V{}':
+					Comp = {1:'x', 2:'y'}
+					frame.create_dataset(fmt.format(Comp[a[0]]), data=X)
+				if fmt == 'e':
+					frame.create_dataset(fmt.format(*a), data=X)
+					frame.create_dataset('P', data=X/3.)
+					frame.create_dataset('BulkPi', data=X*0.)
+					prefactor = 1.0/15.62687/5.068**3 
+					frame.create_dataset('Temp', data=(X*prefactor)**0.25)
+					s = (X + frame['P'].value)/(frame['Temp'].value+1e-14)
+					frame.create_dataset('s', data=s)
+				if fmt == 'Pi{}{}': 
+					frame.create_dataset(fmt.format(*a), data=X)
+		pi33 = -(frame['Pi00'].value + frame['Pi11'].value \
+									 + frame['Pi22'].value)
+		frame.create_dataset('Pi33', data=pi33)
+		pi3Z = np.zeros_like(pi33)
+		frame.create_dataset('Pi03', data=pi3Z)
+		frame.create_dataset('Pi13', data=pi3Z)
+		frame.create_dataset('Pi23', data=pi3Z)
+	f.close()
+
 
 def main():
 	fresult = h5py.File('results.hdf5','a')
@@ -141,7 +126,7 @@ def main():
 			)
 		if len(sys.argv) == 3:
 			run_id = int(sys.argv[2])
-		else:	
+		else:
 			print("Hi")
 			run_id = 0
 	else:
@@ -150,52 +135,32 @@ def main():
 	nevents = 1
 	grid_step = 0.1
 	grid_max = 15.05
-
+	proj, targ = 'Pb', 'Pb'
+	system = proj+targ
 	# run trento and yield initial entropy density arrays
 	def initial_conditions(initial_file='initial.hdf'):
 		run_cmd(
-			'trento Pb Pb', str(nevents),
+			'trento {} {}'.format(proj, targ), str(nevents),
 			'--grid-step {} --grid-max {}'.format(grid_step, grid_max),
 			'--output', initial_file,
 			config.get('trento_args', '')
 		)
 		with h5py.File(initial_file, 'r') as f:
 			for dset in f.values():
-				if dset.name[1:4] != 'TAB':
-					yield [np.array(dset), np.array(f['TAB'+dset.name[-2:]])]
+				yield [dset['matter_density'].value, dset['Ncoll_density'].value]
 
-	#==================Hard pT bins and exp cuts=================================
-	pTlow = 0.
-	pThigh = 100.
-	NpT = 100
-	pTbins = np.linspace(pTlow, pThigh, NpT+1)
-	pTmid = (pTbins[:-1] + pTbins[1:])/2.
-	exp_name = config.get('collaboration', 'something else')
-	sqrts = int(config.get('sqrts', '2760'))
-	print ('exp : ', exp_name)
-	print ('sqrts :', sqrts, " GeV")
-	if exp_name == "CMS":
-		print('use CMS cuts')
-		exp_Raa_ycut = 1.0
-		exp_vn_ycut = 1.0
-		soft_pTrange = [0.3,3.0]
-	elif exp_name == "ALICE":
-		print('use ALICE cuts')
-		exp_Raa_ycut = 0.5
-		exp_vn_ycut = 0.8
-		soft_pTrange = [0.15, 5.0]
-	elif exp_name == "STAR":
-		exp_Raa_ycut = 1.0
-		exp_vn_ycut = 1.0
-	else:
-		print('use default cuts')
-		exp_Raa_ycut = 2.0
-		exp_vn_ycut = 2.0
-
+	# energy
+	sqrts = int(config.get('sqrts', '5020'))
+	print (proj, targ, '@', sqrts, " GeV")
+	
+	# probe
+	HQ_type = config.get('particle_type')
+	print ('Studying {} quark'.format(HQ_type))
+	
 	# read free streaming time and enable for time > epsilon
 	tau_fs = float(config.get('tau_fs', 0))
 	enable_fs = tau_fs > 1e-6
-
+	xi_fs = float(config.get('xi_fs', 0.5))
 	# create sampler HRG object (to be reused for all events)
 	Tswitch = float(config.get('Tswitch', .154))
 	hrg = frzout.HRG(Tswitch, species='urqmd', res_width=True)
@@ -209,53 +174,35 @@ def main():
 		'edec={}'.format(eswitch)
 	]
 
-	# species (name, ID) for identified particle observables
-	species = [
-		('pion', 211),
-		('kaon', 321),
-		('proton', 2212),
-	]
-
 	# Heavy quark species (name, ID)
-	mass = float(config.get('mass', 1.3))
-	HQ_species = [
-		 ('D+', 411), 
-		 ('D0', 421),
-		 ('D*+', 10411),
-		 ('D0*', 10421), 
-		 ('Ds+', 431), 
-		 ('Ds*+', 433)
-	]
-	HQ_id = [s[1] for s in HQ_species]	
-
-	# fully specify numeric data types, including endianness and size, to
-	# ensure consistency across all machines
-	float_t = '<f8'
-	int_t = '<i8'
-	complex_t = '<c16'
+	mass = {'c': 1.3, 'b': 4.2}[HQ_type]
+	HM_species = { 'c':
+		[('D+', 411), ('D0', 421),
+		 ('D*+', 10411), ('D0*', 10421),
+		 ('Ds+', 431), ('Ds*+', 433)],
+		'b':
+		[('B0', 511), ('B+',521),
+		 ('B*0', 513), ('B*+', 523),
+		 ('Bs0', 531), ('Bs*0',541)] } [HQ_type]
+	HM_pid = [s[1] for s in HM_species]
 
 	# run each event
 	for ievent, ic in enumerate(initial_conditions()):
 		event_gp = fresult.create_group('event_{}_{}'.format(run_id, ievent))
-		soft_gp = event_gp.create_group('soft')
-		hard_gp = event_gp.create_group('hard')
-		quark_gp = hard_gp.create_group('quark')
-		meson_gp = hard_gp.create_group('meson')
-
-		soft_gp.attrs.create('initial_entropy', grid_step**2 * ic[0].sum())
-		hard_gp.attrs.create('T_AB', grid_step**2 * ic[1].sum())
-		hard_gp.attrs.create('pT_low', pTlow)
-		hard_gp.attrs.create('pT_high', pThigh)
-		hard_gp.attrs.create('pT_N', NpT)
+		event_gp.attrs.create('initial_entropy', grid_step**2 * ic[0].sum())
+		event_gp.attrs.create('N_coll', grid_step**2 * ic[1].sum())
 
 		# ==================IC+freestream===========================
 		if enable_fs:
+			# save multi frame of freestreaming energy density 
+			# from xi*tau_fs to tau_fs, with 0.1 < xi < 1.0
 			# free stream initial condition
+			save_fs_history(ic[0], event_size=grid_max, grid_step=grid_step, 
+							tau_fs=tau_fs, xi=xi_fs, steps=10, grid_max=grid_max, coarse=2)
 			fs = freestream.FreeStreamer(ic[0], grid_max, tau_fs)
-
 			e = fs.energy_density()
 			e_above = e[e > eswitch].sum()
-			soft_gp.attrs.create('mult_factor', e.sum()/e_above if e_above > 0 else 1)
+			event_gp.attrs.create('mult_factor', e.sum()/e_above if e_above > 0 else 1)
 
 			np.savetxt('ed.dat', e)
 			for i in [1, 2]:
@@ -293,9 +240,8 @@ def main():
 		surface = frzout.Surface(x, sigma, v, pi=pi, Pi=Pi, ymax=3.)
 
 		minsamples, maxsamples = 10, 100  # reasonable range for nsamples
-		minparts = 20000  # min number of particles to sample
+		minparts = 30000  # min number of particles to sample
 		nparts = 0  # for tracking total number of sampled particles
-
 		# sample soft particles and write to file
 		with open('particles_in.dat', 'w') as f:
 			for nsamples in range(1, maxsamples + 1):
@@ -313,11 +259,11 @@ def main():
 			print('no particles produced')
 			continue
 
-		soft_gp.attrs.create('nsamples', nsamples, dtype=int_t)
+		event_gp.attrs.create('nsamples', nsamples, dtype=np.int)
 
 		# ==================Heavy Flavor===========================
-		run_cmd('run-hvq-events ./JetData.h5 ./initial.hdf {} {}'.format(sys.argv[1], run_id))
-
+		run_cmd('run-hvq-events {} {}'.format(sys.argv[1], run_id))
+				
 		# ==================Heavy + Soft --> UrQMD===========================
 		# step 1: combine soft and hard particles and split into n-oversamples
 		run_cmd('convert_format {} particles_in.dat h-meson-final-{}.dat'.format(nsamples, run_id, run_id))
@@ -335,106 +281,14 @@ def main():
 			pool.starmap(afterburner, zip(Nstart, Nstop))
 		# step 4: combine all outputs together
 		subprocess.call('cat urqmd_output_* > particles_out_{}.dat'.format(run_id), shell=True)
-
+		# step 5: clean up
+		subprocess.call('rm -v urqmd_output_* urqmd_input_* urqmd_input.dat', shell=True)
+				
 		# ==================Data Processing==================================
+				# load fonll 
+		fonllcalc = fonll.FONLL()
 
-		# EPS09 spectra dependends on b1, b2, y, pT
-		dN_EPS09 = EPS09_spectra("./hic-hvq/share/hvq/lhc/EPS09-spectra.hdf5",
-							nuA='Pb', nuB='Pb', hvq='Charm', sqrts=sqrts)
-		# nCTEQ spectra dependends only on y and pT
-		dN_nCTEQ = nCTEQ_spectra("./hic-hvq/share/hvq/lhc/nCTEQ15np-spectra.hdf5",
-							nuA='Pb', nuB='Pb', hvq='Charm', sqrts=sqrts)
-		
-		def p4_to_pT_and_y(px, py, pz, E):
-			return np.sqrt(px**2+py**2), 0.5*np.log((E+pz)/(E-pz))
-		def p4_to_pT_phi_and_y(px, py, pz, E):
-			return np.sqrt(px**2+py**2), np.arctan2(py,px), 	\
-				0.5*np.log((E+pz)/(E-pz))
-
-		# ----Function to calculate Raa and v2-------------------------------
-		def get_Raa(pid, pT, y, pT0, y0, s1, s2, yabs_cut, species):
-			# calculate pT-spectra for each species
-			Raa = {'EPS09': {}, 'nCTEQ': {}}
-			for (Dname, Did) in species:
-				cut = (np.abs(y) < yabs_cut) & (pid == Did)
-				# First do it for EPS09
-				HQpT, HQw = pT[cut], dN_EPS09(s1[cut], s2[cut], y0[cut], pT0[cut])
-
-				Hist, BinEdges = np.histogram(HQpT, bins=NpT, 
-											range=[pTlow, pThigh], 
-											normed=True, weights=HQw)
-				Raa['EPS09'].update({Dname : {'shape' : Hist, 'Ntot' : HQw.sum()} })
-				# Then, do it for nCTEQ				
-				HQpT, HQw = pT[cut], dN_nCTEQ(y0[cut], pT0[cut])
-				Hist, BinEdges = np.histogram(HQpT, bins=NpT, 
-											range=[pTlow, pThigh], 
-											normed=True, weights=HQw)
-				Raa['nCTEQ'].update({Dname : {'shape' : Hist, 'Ntot' : HQw.sum()} })
-			return Raa
-
-		def get_vn(pid, pT, phi, y, pT0, y0, s1, s2, yabs_cut, species):
-			# calculate Qn
-			vn = {'EPS09': {}, 'nCTEQ': {}}
-			for (Dname, Did) in species:
-				cut = (np.abs(y) < yabs_cut) & (pid == Did)
-				# First do it for EPS09
-				HQphi, HQpT, HQw = phi[cut], pT[cut], \
-								   dN_EPS09(s1[cut], s2[cut], y0[cut], pT0[cut])
-				Qn_array = np.zeros([NpT, 3], dtype=complex_t)
-				M_array = np.zeros(NpT)
-				for icut, [pl, ph] in enumerate(zip(pTbins[:-1], pTbins[1:])):
-					pTcut = (pl < HQpT) & (HQpT <= ph)
-					diff_phi = HQphi[pTcut]
-					diff_w = HQw[pTcut]
-					Qn_array[icut] = np.array([(np.exp(1j*n*diff_phi)*diff_w).sum() for n in range(1, 4)], dtype=complex_t)
-					M_array[icut] = diff_w.sum()
-				vn['EPS09'].update({Dname : {'Qn' : Qn_array, 'M' : M_array} })
-
-				# Second do it for nCTEQ
-				HQphi, HQpT, HQw = phi[cut], pT[cut], \
-								   dN_nCTEQ(y0[cut], pT0[cut])
-				Qn_array = np.zeros([NpT, 3], dtype=complex_t)
-				M_array = np.zeros(NpT)
-				for icut, [pl, ph] in enumerate(zip(pTbins[:-1], pTbins[1:])):
-					pTcut = (pl < HQpT) & (HQpT <= ph)
-					diff_phi = HQphi[pTcut]
-					diff_w = HQw[pTcut]
-					Qn_array[icut] = np.array([(np.exp(1j*n*diff_phi)*diff_w).sum() for n in range(1, 4)], dtype=complex_t)
-					M_array[icut] = diff_w.sum()
-				vn['nCTEQ'].update({Dname : {'Qn' : Qn_array, 'M' : M_array} })
-			return vn
-		
-
-		# start from here
-		def calculate_and_save_HQ_obs(data_group, 
-									  pid, pT, phi, y, 
-									  pT0, y0, s1, s2,
-									  Raa_ycut, vn_ycut, species):
-			data_group.create_group('EPS09')
-			data_group.create_group('nCTEQ')
-			Raa = get_Raa(pid=pid, pT=pT, y=y, 
-					  	  pT0=pT0, y0=y0, s1=s1, s2=s2,
-						  yabs_cut=Raa_ycut, species=species)
-			vn = get_vn(pid=pid, pT=pT, phi=phi, y=y, 
-						pT0=pT0, y0=y0, s1=s1, s2=s2,
-						yabs_cut=vn_ycut, species=species)
-			for ref in ['EPS09', 'nCTEQ']:
-				dndpt_gp = data_group[ref].create_group('dN_dpt')
-				vn_gp = data_group[ref].create_group('vn')
-				for (pname, pid) in species:
-					dn_i_dpt_gp = dndpt_gp.create_group(pname)
-					dn_i_dpt_gp.create_dataset('shape', 
-								data=Raa[ref][pname]['shape'], dtype=float_t)
-					dn_i_dpt_gp.attrs.create('Ntot',
-								Raa[ref][pname]['Ntot'], dtype=float_t)
-			
-					vn_i_gp = vn_gp.create_group(pname)
-					vn_i_gp.create_dataset('Qn', 
-								data=vn[ref][pname]['Qn'], dtype=complex_t)
-					vn_i_gp.create_dataset('M', 
-								data=vn[ref][pname]['M'], dtype=float_t)
-
-		# read final particle data	
+		# read final particle data
 		ID, charge, fmass, px, py, pz, y, eta, pT0, y0, s1, s2 = (
 			np.array(col, dtype=dtype) for (col, dtype) in
 			zip(
@@ -442,60 +296,83 @@ def main():
 				(2*[int] + 10*[float])
 			)
 		)
+
+		# pT, phi, and id cut
 		pT = np.sqrt(px**2+py**2)
 		phi = np.arctan2(py, px)
 		charged = (charge != 0)
 		abs_eta = np.fabs(eta)
 		abs_ID = np.abs(ID)
-		soft_index = np.array([iID not in HQ_id for iID in abs_ID])
-		hard_index = np.array([iID in HQ_id for iID in abs_ID])
+		is_heavy = np.array([iid in HM_pid for iid in abs_ID], dtype=bool)
+		is_light = np.logical_not(is_heavy)
 
 		#============for soft particles======================
-		soft_gp.attrs.create('dNch_deta',
-			np.count_nonzero(charged & (abs_eta < .5) & soft_index) / nsamples)
-		soft_gp.attrs.create('cen_mult',
-			np.count_nonzero(charged & (abs_eta < .8) & soft_index) / nsamples)
-		phi_soft = phi[charged & (abs_eta < exp_vn_ycut)  & (soft_pTrange[0] < pT) & soft_index]
-		soft_gp.attrs.create('M', phi_soft.shape[0], dtype=int_t)
-		soft_gp.create_dataset('Qn', data=np.array([np.exp(1j*n*phi_soft).sum() for n in range(1, 7)]), dtype=complex_t)
+		event_gp.attrs.create('dNch_deta',
+								np.count_nonzero(charged & (abs_eta<.5) & is_light) / nsamples)
+		for Collab in ['ALICE', 'CMS']: 
+			ref_gp = event_gp.create_group(Collab+"/REF")
+			poi_gp = event_gp.create_group(Collab+"/POI")
+			
+			#=========Event plane Q-vector from UrQMD events======================
+			phi_light = phi[charged & is_light \
+				& (JEC[Collab]['vn_ref']['ybins'][0] < eta) \
+				& (eta < JEC[Collab]['vn_ref']['ybins'][1]) \
+				& (JEC[Collab]['vn_ref']['pTbins'][0] < pT) \
+				& (pT < JEC[Collab]['vn_ref']['pTbins'][1])]
+			ref_gp.create_dataset('M', data=phi_light.shape[0], dtype=np.int)
+			ref_gp.create_dataset('Qn', data=\
+				np.array([np.exp(1j*n*phi_light).sum() for n in range(1, 7)]), 
+					dtype=np.complex)
 
+			#============higher accuracy event-plane=============
+			# oversample to get a high percision event plane at freezeout
+			opTs = []; oys = []; ophis = []; counts=0; nloop=0
+			while counts < 10**6 and nloop < 1000:
+				nloop += 1
+				oE, opx, opy, opz = frzout.sample(surface, hrg)['p'].T
+				oM, opT, oy, ophi = JLP.fourvec_to_curvelinear(opx, opy, opz, oE)
+				counts += len(oM)
+				opTs = np.concatenate([opTs, opT])
+				ophis = np.concatenate([ophis, ophi])
+				oys = np.concatenate([oys, oy])
+			ophi_light = ophis[(JEC[Collab]['vn_ref']['ybins'][0] < oys) \
+								& (oys < JEC[Collab]['vn_ref']['ybins'][1]) \
+								& (JEC[Collab]['vn_ref']['pTbins'][0] < opTs) \
+								& (opTs < JEC[Collab]['vn_ref']['pTbins'][1])]
+			ref_gp.create_dataset('hp-M', data=ophi_light.shape[0], dtype=np.int)
+			ref_gp.create_dataset('hp-Qn', data=np.array([np.exp(1j*n*ophi_light).sum() 
+								for n in range(1, 7)]), dtype=np.complex)
 
-		#===========For heavy particles======================
-		# HF after Urqmd
-		pid = abs_ID[hard_index]
-		pT = pT[hard_index]
-		y = y[hard_index]
-		phi = phi[hard_index]
-		pT0 = pT0[hard_index]
-		y0 = y0[hard_index]	
-		s1 = s1[hard_index]
-		s2 = s2[hard_index]
-		#print(np.max(s1), np.min(s1), np.max(s2), np.min(s2))
-		species = [('D+', 411), ('D0', 421), ('D*+', 10411)]
-		calculate_and_save_HQ_obs(meson_gp, 
-								  pid, pT, phi, y, 
-								  pT0, y0, s1, s2,
-								  exp_Raa_ycut, exp_vn_ycut, species)
+			#===========For heave particles======================
+			# HF after Urqmd
+			HF_dict = { 'pid': abs_ID[is_heavy],
+						'pT' : pT[is_heavy],
+						'y'  : y[is_heavy],
+						'phi': phi[is_heavy],
+						'w' : None
+				  }
+			POI = {'c': [411, 421, 10411], 'b': [511, 521] }[HQ_type]
+			for nPDF in ['EPPS', 'nCTEQ']:
+				w = fonllcalc.interp(nPDF, system, str(sqrts), 
+					HQ_type, pT0[is_heavy], y0[is_heavy])
+				HF_dict['w'] = w[:,0]
+				flow = JLP.Qvector(HF_dict, JEC[Collab]['vn_HF']['pTbins'], 
+									[JEC[Collab]['vn_HF']['ybins']], POI)
+				Yield = JLP.Yield(HF_dict, JEC[Collab]['Raa']['pTbins'], 
+									[JEC[Collab]['Raa']['ybins']], POI)
+				gp = poi_gp.create_group(nPDF)
+				for iid in POI:
+					name = str(iid)
+					gp.create_group('Yield/'+name)
+					gp.create_group('vn/'+name)
+					gp['Yield/'+name].create_dataset('shape', data=Yield[iid]['shape'])
+					gp['Yield/'+name].create_dataset('Ntot', data=Yield[iid]['Ntot'])
+					gp['vn/'+name].create_dataset('Qn', data=flow[iid]['Qn'])
+					gp['vn/'+name].create_dataset('M', data=flow[iid]['M'])
 
-
-		#---------For comparison----------------
-		# For final charm quark
-		fquark = h5py.File('./HeavyFlavorResult.hdf5', 'r')
-		pT0, y0 = p4_to_pT_and_y(*fquark['quark-p0-{}'.format(run_id)].value.T)
-		pT, phi, y = p4_to_pT_phi_and_y(
-								*fquark['quark-p-{}'.format(run_id)].value.T)
-		s1, s2 = fquark['quark-s1-s2-{}'.format(run_id)].value.T
-		pid = fquark['quark-pid-{}'.format(run_id)].value
-		fquark.close()
-		species = [('charm', 4)]
-		calculate_and_save_HQ_obs(quark_gp,
-								  pid, pT, phi, y, 
-								  pT0, y0, s1, s2,
-								  10., 10., species)
 
 	fresult.close()
 
 
 if __name__ == "__main__":
 	main()
-

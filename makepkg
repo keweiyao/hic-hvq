@@ -16,22 +16,20 @@ load_osg(){
   #  - hdf5 for trento
   #  - python and packages
   module purge
-  module load gcc/6.2.0 cmake boost/1.62.0 gsl/2.3 hdf5/1.8.13 python/3.5.2 all-pkgs
+  module load gcc/6.2.0 cmake boost/1.62.0-cxx11 gsl/2.3 python/3.5.2 all-pkgs
+  module load hdf5/1.8.20-cxx11
+  module list
 
-  # the modules set the standard environment variables CPATH and LIBRARY_PATH
+  # explicitl set the standard environment variables CPATH and LIBRARY_PATH
   # set corresponding variables for cmake
   export CMAKE_INCLUDE_PATH=$CPATH
   export CMAKE_LIBRARY_PATH=$LIBRARY_PATH
 
-  # set compiler architecture flags
-  arch_flags='-march=x86-64 -mtune=intel'
-  export CFLAGS="$arch_flags $CFLAGS"
-  export FFLAGS="$arch_flags $FFLAGS"
-  # workaround module C++ libraries compiled for old ABI
-  # https://gcc.gnu.org/onlinedocs/libstdc++/manual/using_dual_abi.html
-  export CXXFLAGS="$arch_flags $CXXFLAGS -D_GLIBCXX_USE_CXX11_ABI=0"
-
-  # explicitly set fortran compiler to override cmake default
+  # set compiler flags
+  export CFLAGS="-march=x86-64 -mtune=intel -ffast-math"
+  export FFLAGS="$CFLAGS"
+  export CXXFLAGS="$CFLAGS"
+  # set fortran compiler to override cmake default
   export FC='gfortran'
 
   # set linker flags to prefer the module versions of libraries to the system versions

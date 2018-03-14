@@ -1,4 +1,5 @@
 build/
+backup/
 */cython/*.cpp
 */build
 test*/

@@ -31,3 +31,15 @@
 [submodule "models/urqmd-afterburner"]
 	path = models/urqmd-afterburner
 	url = https://github.com/keweiyao/urqmd-afterburner.git
+[submodule "models/trento"]
+	path = models/trento
+	url = https://github.com/keweiyao/trento3d.git
+[submodule "models/Scattering"]
+	path = models/Scattering
+	url = https://github.com/keweiyao/Scattering.git
+[submodule "models/fonll"]
+	path = models/fonll
+	url = https://github.com/keweiyao/fonll
+[submodule "models/JetCalc"]
+	path = models/JetCalc
+	url = https://github.com/keweiyao/JetCalc

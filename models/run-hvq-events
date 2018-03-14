@@ -5,143 +5,20 @@ import h5py
 import subprocess
 import sys
 import os
-import event
 from ast import literal_eval as eva
 import fortranformat as ff
-from multiprocessing import Pool, cpu_count
-from functools import partial
+import event
 
-def run(process_id, seed, dynamic_config, phy_config, init_config, NQ, run_id):
-	e1 = event.event(   medium_flags=dynamic_config ,
-                                                physics_flags=phy_config,
-                                                table_folder="./tables/",
-                                                refresh_table=False,
-						seed=seed
-                                        )
-
-	e1.initialize_HQ(   NQ=NQ,
-                            init_flags=init_config,
-			)
-
-	# Run Model
-	for i in range(500):
-		print ("t = %1.2f [fm/c]"%e1.sys_time())
-		status = e1.perform_hydro_step()
-		if not status:
-			break
-	e1.output_oscar('temp-{:d}.dat'.format(process_id))
-
-
-def main():
-	for s in sys.argv:
-		print(s)
-	# parse config file
-	if len(sys.argv) >= 3:
-		hydrofilename = sys.argv[1]
-		icfile = h5py.File(sys.argv[2], 'r')
-		if len(sys.argv) >= 4:
-			with open(sys.argv[3], 'r') as f:
-				config = dict( (i.strip() for i in l.split('=', maxsplit=1)) \
-							   for l in f if l[0] != '#')
-			if len(sys.argv) == 5:
-				run_id = int(sys.argv[4])
-			else:
-				run_id = 0
-		else:
-			config = {}	
-	else:
-		raise ValueError("Usage: (1)hydro, (2)ic, (3)[config], (4)[id]")
-
-	#echo config:
-	for key, val in config.items():
-		print('{} = {}'.format(key, val))
-
-	pkgname = os.environ['pkgname']
-	dynamic_config = {  'type'	  : 'dynamic', 
-						'hydrofile' : hydrofilename	}
-
-
-	if config.get('hvq-mode', 'LBT') == 'LBT':
-		trans_options = {'name' : 'LBT', 
-					   '2->2' : eva(config.get('c22', 'True')),
-					   '2->3' : eva(config.get('c23', 'False')),
-					   '3->2' : eva(config.get('c32', 'False')),
-					   'lambda_rescale' : float(config.get('Lambda', 1.0))
-					   }
-	else:
-		trans_options = {'name'		: 'LGV',
-						 'dt_lrf'   : float(config.get('dt-lrf', 0.1)),
-						 'elastic'  : eva(config.get('elastic-lgv', 'True')),
-						 'Einstein' : eva(config.get('ER', 'True'))
-					   } 
-
-	phy_config = {  'transport' : trans_options,
-					'Nf'	  : 3,
-					'Tc'	  : float(config.get('Tc', 0.154)),
-					'mD' 	  : {'mD-model' : int(config.get('mD-model', 0)),
-								 'mTc'  : float(config.get('mD-Tc', 0.5)),
-								 'slope': float(config.get('mD-slope', 1.0)),
-								 'curv' : float(config.get('mD-curv', 0.0))
-									},
-					'mass'	: float(config.get('mass', 1.3)),
-					'Kfactor' : float(config.get('K', 1.0)),
-				 }  
-  
-
-	TAB = icfile['TAB_0'].value.T
-	dx = icfile['event_0'].attrs['dx']
-	b = icfile['event_0'].attrs['b']
-	init_config =  { 'type'  : 'A+B',
-					 'pTmin'		: 0.1,
-					 'pTmax'		: 130.,
-					 'ymin'		 	: float(config.get('ymin', -2.)),
-					 'ymax'		 	: float(config.get('ymax', 2.)),
-					 'TAB'			: TAB,
-					 'dxy'		   	: dx,
-					 'b'			: b}
-	# parallel heavy quark evolutions
-	Nproc = np.min([cpu_count()-1 or 1, 10])
-	NQ = int(int(config.get('N-hvq', 50000))*1./Nproc)
-	with Pool(Nproc) as pool:
-		random_seed = list(np.random.randint(0, np.iinfo(np.uint32).max, size=Nproc))
-		pool.starmap(partial(run, dynamic_config=dynamic_config, 
-					phy_config=phy_config, init_config=init_config, 
-					NQ=NQ, run_id=run_id), zip(range(Nproc), random_seed) )
-	# output to oscar format
-	with open('hvq-final-{}.dat'.format(run_id), 'w') as f:
-		head3 = ff.FortranRecordWriter(
-                                '2(a8,2x),1x,i3,1x,i6,3x,i3,1x,i6,3x,a4,2x,e10.4,2x,i8')
-		f.write('OSC1997A\n')
-		f.write('final_id_p_x\n')
-		f.write(head3.write(['lbt', '1.0alpha', 208, 82, 208, 82, 'aacm', 1380, 1])+'\n')
-		eventhead = ff.FortranRecordWriter('i10,2x,i10,2x,f8.3,2x,f8.3,2x,i4,2x,i4,2X,i7')
-		f.write(eventhead.write([1, Nproc*NQ, 0.001, 0.001, 1, 1, 1])+'\n')
-		line = ff.FortranRecordWriter('i10,2x,i10,19(2x,d12.6)')
-		i = 0
-		line_in = ff.FortranRecordReader('i10,19(2x,d12.6)')
-		for process_id in range(Nproc):
-			with open("temp-{:d}.dat".format(process_id), 'r') as fi:
-				for l in fi:
-					p = line_in.read(l)
-					f.write(line.write([i, *p])+'\n')
-					i+=1
-
-	# hadronization
-	os.environ["ftn20"] = "./h-meson-final-{}.dat".format(run_id)
-	os.environ["ftn30"] = "./{}/share/hvq-hadronization/parameters_hd.dat".format(pkgname)
-	os.environ["ftn40"] = "./{}/share/hvq-hadronization/recomb_c_tot.dat".format(pkgname)
-	os.environ["ftn50"] = "./{}/share/hvq-hadronization/recomb_c_BR1.dat".format(pkgname)
-	subprocess.run("hvq-hadronization", stdin=open('./hvq-final-{}.dat'.format(run_id)))
-
-	# reading back fortran format in python is too slow ...
+# save a copy of final charm and hadrons before UrQMD to a hdf5 dataset
+def save_to_dataset(run_id):
+	line = ff.FortranRecordReader('i10,2x,i10,19(2x,d12.6)')
+	fh5 = h5py.File('HeavyFlavorResult.hdf5', 'a')
+	#n, id, px, py, pz, p0, M, x, y, z, t, T, vx, vy, vz, ipx, ipy, ipz, weight
 	pid = []
 	p = []
 	p0 = []
 	s1s2 = []
-	line = ff.FortranRecordReader('i10,2x,i10,19(2x,d12.6)')
-	fh5 = h5py.File('HeavyFlavorResult.hdf5', 'a')
-	#n, id, px, py, pz, p0, M, x, y, z, t, T, vx, vy, vz, ipx, ipy, ipz, weight
-	with open('./hvq-final-{}.dat'.format(run_id, process_id)) as f:
+	with open('./hvq-final-{}.dat'.format(run_id)) as f:
 		for i, l in enumerate(f):
 			if i>3:
 				ds = line.read(l)
@@ -158,7 +35,6 @@ def main():
 	p = []
 	p0 = []
 	s1s2 = []
-
 	with open('./h-meson-final-{}.dat'.format(run_id)) as f:
 		for i, l in enumerate(f):
 			if i>3:
@@ -172,6 +48,75 @@ def main():
 	fh5.create_dataset(name='meson-p0-{}'.format(run_id), data=np.array(p0))
 	fh5.create_dataset(name='meson-s1-s2-{}'.format(run_id), data=np.array(s1s2))
 	fh5.close()
+
+def main():
+	# echo the command
+	for s in sys.argv:
+		print(s)
+
+	# parse config file
+	with open(sys.argv[1], 'r') as f:
+		config = dict( (i.strip() for i in l.split('=', maxsplit=1)) \
+				for l in f if l[0] != '#')
+	if len(sys.argv) == 3:
+		run_id = int(sys.argv[2])
+	else:
+		run_id = 0
+
+	#echo config:
+	print('##################################')
+	for key, val in config.items():
+		print('{} = {}'.format(key, val))
+	print('##################################')
+	
+	pkgname = os.environ['pkgname'] # package name/path
+	p_type = config.get('particle_type', 'c') # c / b
+	N_particles = int(config.get('N_particles', 10000)) # number of sampling
+	ymax = float(config.get('ymax', 2.)) # maximum range of rapidity sampling
+	icfile = h5py.File('./initial.hdf', 'r')
+	TAB = icfile['event_0/Ncoll_density'].value.T	# TAB profile
+	dx = icfile['event_0'].attrs['dxy'] # TAB grid size
+	b = icfile['event_0'].attrs['b']   # impact parameter of this event
+	icfile.close()
+
+	# physics configuration
+	Tc = 0.154
+	mass = 1.3 if p_type == 'c' else 4.2
+	
+	# initilization fonfigureation
+	init_config =  { 'type'  : 'A+B',
+					 'pTmin'		: 0.5,
+					 'pTmax'		: 130.5,
+					 'ymax'		 	: ymax,
+					 'TAB'			: TAB,
+					 'dxy'		   	: dx,
+					 'b'			: b}
+
+	e1 = event.event(medium={'type':'dynamic', 'hydrofile': "./JetData.h5"},
+			preeq={'type':'dynamic', 'hydrofile': "./FreeStream.h5"}, 
+			LBT={'mu':1.5}, 
+			LGV={'A':.5, 'B':1.}, Tc=Tc, M=mass)
+	e1.initialize_HQ(   NQ=N_particles, init_flags=init_config )
+
+	# preeq stage
+	while e1.perform_fs_step():
+		print("t = {:1.2f} [fm/c]".format(e1.sys_time()) )
+	# hydro stage
+	while e1.perform_hydro_step():
+		print("t = {:1.2f} [fm/c]".format(e1.sys_time()) )
+
+	# write oscar format
+	e1.output_oscar("./hvq-final-{}.dat".format(run_id))
+
+	# hadronization
+	os.environ["ftn20"] = "./h-meson-final-{}.dat".format(run_id)
+	os.environ["ftn30"] = "./{}/share/hvq-hadronization/parameters_hd.dat".format(pkgname)
+	os.environ["ftn40"] = "./{}/share/hvq-hadronization/recomb_{}_tot.dat".format(pkgname, p_type)
+	os.environ["ftn50"] = "./{}/share/hvq-hadronization/recomb_{}_BR1.dat".format(pkgname, p_type)
+	subprocess.run("hvq-hadronization", stdin=open('./hvq-final-{}.dat'.format(run_id)))
+
+	# save back to hdf5 file
+	save_to_dataset(run_id)
 
 if __name__ == "__main__":
 	main()
