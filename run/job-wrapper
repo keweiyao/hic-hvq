@@ -6,7 +6,6 @@ uname -nr
 # read arguments
 inputfile=$1
 desturl=$2
-eventperjob=4
 
 # load necessary modules
 source /cvmfs/oasis.opensciencegrid.org/osg/modules/lmod/current/init/bash
@@ -17,7 +16,6 @@ module list
 # unpack package
 export pkgname='hic-hvq'
 tar xzf $pkgname.tar.gz
-#tar xzf $inputfile --strip-components 2
 # set environment variables
 prefix="$(pwd)/$pkgname"
 export PATH="$prefix/bin:$PATH"
@@ -26,29 +24,8 @@ export PYTHONPATH="$(echo $prefix/lib/python*/site-packages)"
 #:"$(echo $prefix/lib64/python*/site-packages)"
 echo $PYTHONPATH
 
-if [[ -f HeavyFlavorResult.hdf5 ]]; then
-    rm HeavyFlavorResult.hdf5
-fi
-if [[ -f results.hdf5 ]]; then
-    rm results.hdf5
-fi
-
-# go!
-for i in `seq 1 $eventperjob`; do
-  # first clean the info from last run
-  if [[ -f initial.hdf ]]; then
-    rm initial.hdf
-  fi
-  if [[ -f JetData.h5 ]]; then
-    rm JetData.h5
-  fi
-  if [[ -f FreeStream.h5 ]]; then
-    rm FreeStream.h5
-  fi
-
-  # run events
-  run-events $inputfile $i || exit 1
-done
+# run events
+run-events $inputfile || exit 1
 
 # transfer results
 # try to be fault-tolerant

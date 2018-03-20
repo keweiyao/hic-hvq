@@ -1,125 +1,97 @@
 #!/usr/bin/env python3
-
 import numpy as np
-import h5py
-import subprocess
-import sys
-import os
+import h5py, sys, os, subprocess
 from ast import literal_eval as eva
 import fortranformat as ff
 import event
 
-# save a copy of final charm and hadrons before UrQMD to a hdf5 dataset
-def save_to_dataset(run_id):
+# save a copy of quarks and hadrons @ freezeout
+def save_to_dataset(group, pname):
 	line = ff.FortranRecordReader('i10,2x,i10,19(2x,d12.6)')
-	fh5 = h5py.File('HeavyFlavorResult.hdf5', 'a')
-	#n, id, px, py, pz, p0, M, x, y, z, t, T, vx, vy, vz, ipx, ipy, ipz, weight
-	pid = []
-	p = []
-	p0 = []
-	s1s2 = []
-	with open('./hvq-final-{}.dat'.format(run_id)) as f:
-		for i, l in enumerate(f):
-			if i>3:
-				ds = line.read(l)
-				pid.append(ds[1])
-				p.append(ds[2:6])
-				p0.append(ds[15:19])
-				s1s2.append(ds[19:21])
-	fh5.create_dataset(name='quark-pid-{}'.format(run_id), data=np.array(pid))
-	fh5.create_dataset(name='quark-p-{}'.format(run_id), data=np.array(p))
-	fh5.create_dataset(name='quark-p0-{}'.format(run_id), data=np.array(p0))
-	fh5.create_dataset(name='quark-s1-s2-{}'.format(run_id), data=np.array(s1s2))
-	
-	pid = []
-	p = []
-	p0 = []
-	s1s2 = []
-	with open('./h-meson-final-{}.dat'.format(run_id)) as f:
-		for i, l in enumerate(f):
-			if i>3:
-				ds = line.read(l)
-				pid.append(ds[1])
-				p.append(ds[2:6])
-				p0.append(ds[15:19])
-				s1s2.append(ds[19:21])
-	fh5.create_dataset(name='meson-pid-{}'.format(run_id), data=np.array(pid))
-	fh5.create_dataset(name='meson-p-{}'.format(run_id), data=np.array(p))
-	fh5.create_dataset(name='meson-p0-{}'.format(run_id), data=np.array(p0))
-	fh5.create_dataset(name='meson-s1-s2-{}'.format(run_id), data=np.array(s1s2))
-	fh5.close()
+	#n, id, px, py, pz, p0, M, x, y, z, t, T,
+	# vx, vy, vz, ipx, ipy, ipz, weight
+	for level, fnamefmt in zip(['quark', 'hadron'],
+		['{}-quark-frzout.dat', '{}-meson-frzout.dat']):
+		pid = []
+		p = []
+		p0 = []
+		with open(fnamefmt.format(pname)) as f:
+			for i, l in enumerate(f):
+				if i>3:
+					ds = line.read(l)
+					pid.append(ds[1])
+					p.append(ds[2:6])
+					p0.append(ds[15:19])
+		group.create_dataset(level+'/pid', data=np.array(pid), dtype=np.int)
+		group.create_dataset(level+'/p', data=np.array(p), dtype=np.float)
+		group.create_dataset(level+'/p0', data=np.array(p0), dtype=np.float)
 
 def main():
-	# echo the command
-	for s in sys.argv:
-		print(s)
-
 	# parse config file
 	with open(sys.argv[1], 'r') as f:
 		config = dict( (i.strip() for i in l.split('=', maxsplit=1)) \
 				for l in f if l[0] != '#')
-	if len(sys.argv) == 3:
-		run_id = int(sys.argv[2])
-	else:
-		run_id = 0
-
+	ievent = int(sys.argv[2])
 	#echo config:
 	print('##################################')
 	for key, val in config.items():
 		print('{} = {}'.format(key, val))
 	print('##################################')
-	
-	pkgname = os.environ['pkgname'] # package name/path
-	p_type = config.get('particle_type', 'c') # c / b
-	N_particles = int(config.get('N_particles', 10000)) # number of sampling
-	ymax = float(config.get('ymax', 2.)) # maximum range of rapidity sampling
-	icfile = h5py.File('./initial.hdf', 'r')
-	TAB = icfile['event_0/Ncoll_density'].value.T	# TAB profile
-	dx = icfile['event_0'].attrs['dxy'] # TAB grid size
-	b = icfile['event_0'].attrs['b']   # impact parameter of this event
-	icfile.close()
 
-	# physics configuration
-	Tc = 0.154
-	mass = 1.3 if p_type == 'c' else 4.2
-	
+	pkgname = os.environ['pkgname'] # package name/path
+	p_types = ['c', 'b'] # study charm and bottom quarks / hadrons
+	with h5py.File('./initial.hdf', 'r') as icfile:
+		prefix = "event_{}".format(ievent)
+		print("Hard event: ",prefix)
+		TAB = icfile[prefix+'/Ncoll_density'].value.T	# TAB profile
+		dx = icfile[prefix].attrs['dxy'] # TAB grid size
+		b = icfile[prefix].attrs['b']   # impact parameter of this event
+	# setting initialization
+	N_particles = int(config.get('N_particles')) # number of sampling
+	Emax = float(config.get('Emax')) # range of initial HQ rapidity
+	pTmin = float(config.get('pTmin')) # min of initial HQ pT
+	pTmax = float(config.get('pTmax')) # max of initial HQ pT
+	# physics!
+	mu = float(config.get('mu')) # no default, have to be sure what I am doing
+	A = float(config.get('A')) # no default, have to be sure what I am doing
+	B = float(config.get('B')) # no default, have to be sure what I am doing
+
 	# initilization fonfigureation
-	init_config =  { 'type'  : 'A+B',
-					 'pTmin'		: 0.5,
-					 'pTmax'		: 130.5,
-					 'ymax'		 	: ymax,
-					 'TAB'			: TAB,
-					 'dxy'		   	: dx,
-					 'b'			: b}
+	init_config =  { 'type': 'A+B',
+			'pTmin': pTmin, 'pTmax': pTmax, 'Emax': Emax,
+			 'TAB': TAB, 'dxy': dx, 'b': b}
 
 	e1 = event.event(medium={'type':'dynamic', 'hydrofile': "./JetData.h5"},
-			preeq={'type':'dynamic', 'hydrofile': "./FreeStream.h5"}, 
-			LBT={'mu':1.5}, 
-			LGV={'A':.5, 'B':1.}, Tc=Tc, M=mass)
+			preeq={'type':'dynamic', 'hydrofile': "./FreeStream.h5"},
+			LBT={'mu': mu}, LGV={'A': A, 'B': B},  Tc=0.154)
 	e1.initialize_HQ(   NQ=N_particles, init_flags=init_config )
 
 	# preeq stage
 	while e1.perform_fs_step():
-		print("t = {:1.2f} [fm/c]".format(e1.sys_time()) )
+		print("t = {:1.3f} [fm/c]".format(e1.sys_time()) )
 	# hydro stage
 	while e1.perform_hydro_step():
-		print("t = {:1.2f} [fm/c]".format(e1.sys_time()) )
-
-	# write oscar format
-	e1.output_oscar("./hvq-final-{}.dat".format(run_id))
+		print("t = {:1.3f} [fm/c]".format(e1.sys_time()) )
 
 	# hadronization
-	os.environ["ftn20"] = "./h-meson-final-{}.dat".format(run_id)
-	os.environ["ftn30"] = "./{}/share/hvq-hadronization/parameters_hd.dat".format(pkgname)
-	os.environ["ftn40"] = "./{}/share/hvq-hadronization/recomb_{}_tot.dat".format(pkgname, p_type)
-	os.environ["ftn50"] = "./{}/share/hvq-hadronization/recomb_{}_BR1.dat".format(pkgname, p_type)
-	subprocess.run("hvq-hadronization", stdin=open('./hvq-final-{}.dat'.format(run_id)))
+	prefix = "./{}/share/hvq-hadronization/".format(pkgname)
+	for pid in p_types:
+		# write oscar format
+		e1.output_oscar(4 if pid == 'c' else 5, "./{}-quark-frzout.dat".format(pid))
+		# hadronization
+		os.environ["ftn20"] = "./{}-meson-frzout.dat".format(pid)
+		os.environ["ftn30"] = prefix+"parameters_hd.dat"
+		os.environ["ftn40"] = prefix+"recomb_{}_tot.dat".format(pid)
+		os.environ["ftn50"] = prefix+"recomb_{}_BR1.dat".format(pid)
+		subprocess.run("hvq-hadronization",
+					stdin=open("./{}-quark-frzout.dat".format(pid)))
 
 	# save back to hdf5 file
-	save_to_dataset(run_id)
+	with h5py.File('HeavyAtFrzout.hdf5', 'w') as fh5:
+		group = fh5.create_group("event")
+		for pid in p_types:
+			subgroup = group.create_group(pid)
+			save_to_dataset(subgroup, pid)
 
 if __name__ == "__main__":
 	main()
-
-
-

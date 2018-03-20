@@ -56,7 +56,7 @@ cd $scratchdir
 #    machines ("black holes").  See e.g.
 #    https://htcondor-wiki.cs.wisc.edu/index.cgi/wiki?p=AvoidingBlackHoles
 histlen=5
-requirements='HAS_CVMFS_oasis_opensciencegrid_org'
+requirements='OSGVO_OS_STRING == "RHEL 6" && HAS_CVMFS_oasis_opensciencegrid_org'
 for i in $(seq $(( histlen - 1 ))); do
   requirements="$requirements && target.machine =!= MachineAttrMachine$i"
 done
@@ -78,7 +78,7 @@ job_machine_attrs = Machine
 job_machine_attrs_history_length = $histlen
 requirements = $requirements
 
-request_memory = 500M
+request_memory = 2.0G
 request_disk = 2.0G
 rank = KFlops
 

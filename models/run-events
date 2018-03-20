@@ -41,7 +41,7 @@ def read_text_file(filename):
 		return [l.split() for l in f if not l.startswith(b'#')]
 
 def save_fs_history(ic, event_size, grid_step, tau_fs, xi, grid_max, steps=5, coarse=False):
-	f = h5py.File('FreeStream.h5')
+	f = h5py.File('FreeStream.h5', 'w')
 	dxy = grid_step*(coarse or 1)
 	ls = math.ceil(event_size/dxy)
 	n = 2*ls + 1
@@ -57,7 +57,7 @@ def save_fs_history(ic, event_size, grid_step, tau_fs, xi, grid_max, steps=5, co
 	gp.attrs.create('YL', [-ls])
 	gp.attrs.create('YH', [ls])
 	gp.attrs.create('Tau0', [tau0])
-	gp.attrs.create('dTau', [dtau]) 
+	gp.attrs.create('dTau', [dtau])
 	gp.attrs.create('DX', [dxy])
 	gp.attrs.create('DY', [dxy])
 	gp.attrs.create('NTau', [steps])
@@ -99,11 +99,11 @@ def save_fs_history(ic, event_size, grid_step, tau_fs, xi, grid_max, steps=5, co
 					frame.create_dataset(fmt.format(*a), data=X)
 					frame.create_dataset('P', data=X/3.)
 					frame.create_dataset('BulkPi', data=X*0.)
-					prefactor = 1.0/15.62687/5.068**3 
+					prefactor = 1.0/15.62687/5.068**3
 					frame.create_dataset('Temp', data=(X*prefactor)**0.25)
 					s = (X + frame['P'].value)/(frame['Temp'].value+1e-14)
 					frame.create_dataset('s', data=s)
-				if fmt == 'Pi{}{}': 
+				if fmt == 'Pi{}{}':
 					frame.create_dataset(fmt.format(*a), data=X)
 		pi33 = -(frame['Pi00'].value + frame['Pi11'].value \
 									 + frame['Pi22'].value)
@@ -116,25 +116,20 @@ def save_fs_history(ic, event_size, grid_step, tau_fs, xi, grid_max, steps=5, co
 
 
 def main():
-	fresult = h5py.File('results.hdf5','a')
 	# parse config file
-	if len(sys.argv) >= 2:
+	if len(sys.argv) == 2:
 		with open(sys.argv[1], 'r') as f:
 			config = dict(
 				(i.strip() for i in l.split('=', maxsplit=1))
 				for l in f if l[0] != '#'
 			)
-		if len(sys.argv) == 3:
-			run_id = int(sys.argv[2])
-		else:
-			print("Hi")
-			run_id = 0
 	else:
 		config = {}
-	print ('==========',run_id, '=============')
-	nevents = 1
+	nevents = int(config.get('nevents', 1))
 	grid_step = 0.1
 	grid_max = 15.05
+	dtau = .25*grid_step
+	Nhalf = int(grid_max/grid_step)
 	proj, targ = 'Pb', 'Pb'
 	system = proj+targ
 	# run trento and yield initial entropy density arrays
@@ -152,14 +147,9 @@ def main():
 	# energy
 	sqrts = int(config.get('sqrts', '5020'))
 	print (proj, targ, '@', sqrts, " GeV")
-	
-	# probe
-	HQ_type = config.get('particle_type')
-	print ('Studying {} quark'.format(HQ_type))
-	
-	# read free streaming time and enable for time > epsilon
-	tau_fs = float(config.get('tau_fs', 0))
-	enable_fs = tau_fs > 1e-6
+
+	# read free streaming time
+	tau_fs = float(config.get('tau_fs', 0.6))
 	xi_fs = float(config.get('xi_fs', 0.5))
 	# create sampler HRG object (to be reused for all events)
 	Tswitch = float(config.get('Tswitch', .154))
@@ -168,14 +158,12 @@ def main():
 
 	# append switching energy density to vishnew arguments
 	vishnew_args = [
-		config.get('vishnew_args', ''),
-		'initialuread=1 iein=0 t0={}'.format(tau_fs) if enable_fs else
-		'initialuread=0 iein=1',
+		config.get('hydro-args', ''),
 		'edec={}'.format(eswitch)
 	]
 
 	# Heavy quark species (name, ID)
-	mass = {'c': 1.3, 'b': 4.2}[HQ_type]
+	# mass = {'c': 1.3, 'b': 4.2}
 	HM_species = { 'c':
 		[('D+', 411), ('D0', 421),
 		 ('D*+', 10411), ('D0*', 10421),
@@ -183,94 +171,83 @@ def main():
 		'b':
 		[('B0', 511), ('B+',521),
 		 ('B*0', 513), ('B*+', 523),
-		 ('Bs0', 531), ('Bs*0',541)] } [HQ_type]
-	HM_pid = [s[1] for s in HM_species]
+		 ('Bs0', 531), ('Bs*0',10531)] }
+	c_hadron_pid = [s[1] for s in HM_species['c']]
+	b_hadron_pid = [s[1] for s in HM_species['b']]
 
 	# run each event
+	fresult = h5py.File('results.hdf5','a')
 	for ievent, ic in enumerate(initial_conditions()):
-		event_gp = fresult.create_group('event_{}_{}'.format(run_id, ievent))
+		print("# event ", ievent)
+		event_gp = fresult.create_group('event_{}'.format(ievent))
 		event_gp.attrs.create('initial_entropy', grid_step**2 * ic[0].sum())
 		event_gp.attrs.create('N_coll', grid_step**2 * ic[1].sum())
 
 		# ==================IC+freestream===========================
-		if enable_fs:
-			# save multi frame of freestreaming energy density 
-			# from xi*tau_fs to tau_fs, with 0.1 < xi < 1.0
-			# free stream initial condition
-			save_fs_history(ic[0], event_size=grid_max, grid_step=grid_step, 
-							tau_fs=tau_fs, xi=xi_fs, steps=10, grid_max=grid_max, coarse=2)
-			fs = freestream.FreeStreamer(ic[0], grid_max, tau_fs)
-			e = fs.energy_density()
-			e_above = e[e > eswitch].sum()
-			event_gp.attrs.create('mult_factor', e.sum()/e_above if e_above > 0 else 1)
+		# save multi frame of freestreaming energy density
+		# from xi*tau_fs to tau_fs, with 0.1 < xi < 1.0
+		# free stream initial condition
+		save_fs_history(ic[0], event_size=grid_max, grid_step=grid_step,
+						tau_fs=tau_fs, xi=xi_fs, steps=10, grid_max=grid_max, coarse=4)
+		fs = freestream.FreeStreamer(ic[0], grid_max, tau_fs)
+		e = fs.energy_density()
+		e_above = e[e > eswitch].sum()
+		event_gp.attrs.create('mult_factor', e.sum()/e_above if e_above > 0 else 1)
+		e.tofile('ed.dat')
+		for i in [1, 2]:
+			fs.flow_velocity(i).tofile('u{}.dat'.format(i))
+		for ij in [(1, 1), (1, 2), (2, 2)]:
+			fs.shear_tensor(*ij).tofile('pi{}{}.dat'.format(*ij))
 
-			np.savetxt('ed.dat', e)
-			for i in [1, 2]:
-				np.savetxt('u{}.dat'.format(i), fs.flow_velocity(i))
-			for ij in [(1, 1), (1, 2), (2, 2)]:
-				np.savetxt(
-					'pi{}{}.dat'.format(*ij), fs.shear_tensor(*ij))
-		else:
-			# skip free streaming, use initial condition as entropy density
-			np.savetxt('sd.dat', ic[0])
 		# ==================Vishnew===========================
 		# hydro
-		run_cmd('vishnew', *vishnew_args)
+		run_cmd('osu-hydro',
+				'initialuread=1 iein=0',
+				't0={} dt={} dxy={} nls={}'.format(tau_fs, dtau, grid_step, Nhalf),
+				*vishnew_args)
 		# ==================Frzout Sampler===========================
 		# read freeze-out surface data
-		surface_data = np.array(
-			read_text_file('surface.dat'),
-			dtype=float
-		)
-		# end event if the surface is empty -- this occurs in ultra-peripheral
-		# events where the initial condition doesn't exceed Tswitch
+		surface_data = np.fromfile('surface.dat', dtype='f8').reshape(-1, 16)
 		if surface_data.size == 0:
-			print('empty hypersurface')
+			print("empty event")
 			continue
-
-		# unpack surface_data columns:
-		#   0	1  2  3		 4		 5		 6	7
-		#   tau  x  y  dsigma^t  dsigma^x  dsigma^y  v_x  v_y
-		#   8	 9	 10	11	12	13	14	15
-		#   pitt  pitx  pity  pixx  pixy  piyy  pizz  Pi
-		x, sigma, v, _ = np.hsplit(surface_data, [3, 6, 8])
-		pi = dict(zip(['xx', 'xy', 'yy'], surface_data.T[11:14]))
-		Pi = surface_data.T[15]
-		# create sampler surface object
-		surface = frzout.Surface(x, sigma, v, pi=pi, Pi=Pi, ymax=3.)
+		surface = frzout.Surface(**dict(
+			zip(['x', 'sigma', 'v'], np.hsplit(surface_data, [3, 6, 8])),
+			pi=dict(zip(['xx', 'xy', 'yy'], surface_data.T[11:14])),
+			Pi=surface_data.T[15]),
+			ymax=3.)
 
 		minsamples, maxsamples = 10, 100  # reasonable range for nsamples
 		minparts = 30000  # min number of particles to sample
 		nparts = 0  # for tracking total number of sampled particles
 		# sample soft particles and write to file
 		with open('particles_in.dat', 'w') as f:
-			for nsamples in range(1, maxsamples + 1):
+			nsamples = 0
+			while nsamples < maxsamples+1:
 				parts = frzout.sample(surface, hrg)
 				if parts.size == 0:
 					continue
-				nparts += parts.size
-				print('#', parts.size, file=f)
-				for p in parts:
-					print(p['ID'], *chain(p['x'], p['p']), file=f)
-				if nparts >= minparts and nsamples >= minsamples:
-					break
-
-		if nparts == 0:
-			print('no particles produced')
-			continue
+				else:
+					nsamples += 1
+					nparts += parts.size
+					print('#', parts.size, file=f)
+					for p in parts:
+						print(p['ID'], *chain(p['x'], p['p']), file=f)
+					if nparts >= minparts and nsamples >= minsamples:
+						break
 
 		event_gp.attrs.create('nsamples', nsamples, dtype=np.int)
 
 		# ==================Heavy Flavor===========================
-		run_cmd('run-hvq-events {} {}'.format(sys.argv[1], run_id))
-				
+		run_cmd('run-hvq-events {} {}'.format(sys.argv[1], ievent) )
+
 		# ==================Heavy + Soft --> UrQMD===========================
 		# step 1: combine soft and hard particles and split into n-oversamples
-		run_cmd('convert_format {} particles_in.dat h-meson-final-{}.dat'.format(nsamples, run_id, run_id))
+		run_cmd('convert_format {} particles_in.dat c-meson-frzout.dat'.format(nsamples))
 		# step 2: split these n-oversamples into separate files
 		subprocess.call('csplit --elide-empty-files --digits=3 --quiet --prefix=urqmd_input_ urqmd_input.dat "/UQMD/" "{*}" ', shell=True)
 		# step 3: parallely run each oversamples:
-		Nproc = np.min([cpu_count()-1 or 1, 10, nsamples])
+		Nproc = np.min([cpu_count()-1 or 1, 8, nsamples])
 		Nstep = np.floor(nsamples*1./Nproc).astype(int)
 		Nstart = (np.array(range(Nproc))*Nstep).astype(int)
 		Nstop = Nstart + Nstep
@@ -280,19 +257,19 @@ def main():
 		with Pool(Nproc) as pool:
 			pool.starmap(afterburner, zip(Nstart, Nstop))
 		# step 4: combine all outputs together
-		subprocess.call('cat urqmd_output_* > particles_out_{}.dat'.format(run_id), shell=True)
+		subprocess.call('cat urqmd_output_* > particles_out.dat', shell=True)
 		# step 5: clean up
 		subprocess.call('rm -v urqmd_output_* urqmd_input_* urqmd_input.dat', shell=True)
-				
+
 		# ==================Data Processing==================================
-				# load fonll 
+				# load fonll
 		fonllcalc = fonll.FONLL()
 
 		# read final particle data
 		ID, charge, fmass, px, py, pz, y, eta, pT0, y0, s1, s2 = (
 			np.array(col, dtype=dtype) for (col, dtype) in
 			zip(
-				zip(*read_text_file('particles_out_{}.dat'.format(run_id))),
+				zip(*read_text_file('particles_out.dat')),
 				(2*[int] + 10*[float])
 			)
 		)
@@ -303,16 +280,19 @@ def main():
 		charged = (charge != 0)
 		abs_eta = np.fabs(eta)
 		abs_ID = np.abs(ID)
-		is_heavy = np.array([iid in HM_pid for iid in abs_ID], dtype=bool)
+		# It may be redunant to find b-hadron at this stage since UrQMD has
+		# not included them yet
+		is_c_hadron = np.array([u in c_hadron_pid for u in abs_ID], dtype=bool)
+		is_b_hadron = np.array([u in b_hadron_pid for u in abs_ID], dtype=bool)
+		is_heavy = np.logical_or(is_c_hadron, is_b_hadron)
 		is_light = np.logical_not(is_heavy)
 
 		#============for soft particles======================
-		event_gp.attrs.create('dNch_deta',
-								np.count_nonzero(charged & (abs_eta<.5) & is_light) / nsamples)
-		for Collab in ['ALICE', 'CMS']: 
+		event_gp.attrs.create('dNch_deta', np.count_nonzero(charged & (abs_eta<.5) & is_light) / nsamples)
+		for Collab in ['ALICE', 'CMS']:
 			ref_gp = event_gp.create_group(Collab+"/REF")
 			poi_gp = event_gp.create_group(Collab+"/POI")
-			
+
 			#=========Event plane Q-vector from UrQMD events======================
 			phi_light = phi[charged & is_light \
 				& (JEC[Collab]['vn_ref']['ybins'][0] < eta) \
@@ -321,13 +301,13 @@ def main():
 				& (pT < JEC[Collab]['vn_ref']['pTbins'][1])]
 			ref_gp.create_dataset('M', data=phi_light.shape[0], dtype=np.int)
 			ref_gp.create_dataset('Qn', data=\
-				np.array([np.exp(1j*n*phi_light).sum() for n in range(1, 7)]), 
+				np.array([np.exp(1j*n*phi_light).sum() for n in range(1, 7)]),
 					dtype=np.complex)
 
 			#============higher accuracy event-plane=============
 			# oversample to get a high percision event plane at freezeout
 			opTs = []; oys = []; ophis = []; counts=0; nloop=0
-			while counts < 10**6 and nloop < 1000:
+			while counts < 10**5 and nloop < 1000:
 				nloop += 1
 				oE, opx, opy, opz = frzout.sample(surface, hrg)['p'].T
 				oM, opT, oy, ophi = JLP.fourvec_to_curvelinear(opx, opy, opz, oE)
@@ -340,31 +320,68 @@ def main():
 								& (JEC[Collab]['vn_ref']['pTbins'][0] < opTs) \
 								& (opTs < JEC[Collab]['vn_ref']['pTbins'][1])]
 			ref_gp.create_dataset('hp-M', data=ophi_light.shape[0], dtype=np.int)
-			ref_gp.create_dataset('hp-Qn', data=np.array([np.exp(1j*n*ophi_light).sum() 
+			ref_gp.create_dataset('hp-Qn', data=np.array([np.exp(1j*n*ophi_light).sum()
 								for n in range(1, 7)]), dtype=np.complex)
 
 			#===========For heave particles======================
-			# HF after Urqmd
-			HF_dict = { 'pid': abs_ID[is_heavy],
-						'pT' : pT[is_heavy],
-						'y'  : y[is_heavy],
-						'phi': phi[is_heavy],
+			# For charmed hadrons, use info after urqmd
+			HF_dict = { 'pid': abs_ID[is_c_hadron],
+						'pT' : pT[is_c_hadron],
+						'y'  : y[is_c_hadron],
+						'phi': phi[is_c_hadron],
 						'w' : None
 				  }
-			POI = {'c': [411, 421, 10411], 'b': [511, 521] }[HQ_type]
+			POI = [411, 421, 10411]
 			for nPDF in ['EPPS', 'nCTEQ']:
-				w = fonllcalc.interp(nPDF, system, str(sqrts), 
-					HQ_type, pT0[is_heavy], y0[is_heavy])
+				w = fonllcalc.interp(nPDF, system, str(sqrts),
+					'c', pT0[is_c_hadron], y0[is_c_hadron])
 				HF_dict['w'] = w[:,0]
-				flow = JLP.Qvector(HF_dict, JEC[Collab]['vn_HF']['pTbins'], 
-									[JEC[Collab]['vn_HF']['ybins']], POI)
-				Yield = JLP.Yield(HF_dict, JEC[Collab]['Raa']['pTbins'], 
-									[JEC[Collab]['Raa']['ybins']], POI)
+				flow = JLP.Qvector(HF_dict, JEC[Collab]['vn_HF']['pTbins'],
+							JEC[Collab]['vn_HF']['ybins'], POI)
+				Yield = JLP.Yield(HF_dict, JEC[Collab]['Raa']['pTbins'],
+							JEC[Collab]['Raa']['ybins'], POI)
 				gp = poi_gp.create_group(nPDF)
 				for iid in POI:
 					name = str(iid)
 					gp.create_group('Yield/'+name)
 					gp.create_group('vn/'+name)
+					gp['Yield/'+name].create_dataset('shape', data=Yield[iid]['shape'])
+					gp['Yield/'+name].create_dataset('Ntot', data=Yield[iid]['Ntot'])
+					gp['vn/'+name].create_dataset('Qn', data=flow[iid]['Qn'])
+					gp['vn/'+name].create_dataset('M', data=flow[iid]['M'])
+
+		# For bottom hadrons, use info at freezeout, since UrQMD does not
+		# includes bottom hadrons at this time
+		print("doing B hadron observables")
+		for Collab in ['ALICE', 'CMS']:
+			poi_gp = event_gp.require_group(Collab+"/POI")
+
+			with h5py.File('HeavyAtFrzout.hdf5', 'r') as fh5:
+				ds = fh5["event/b/hadron"]
+				pid = np.abs(ds['pid'].value).astype(int)
+				px, py, pz, E = ds['p'].value.T
+				m, pT, y, phi = JLP.fourvec_to_curvelinear(px, py, pz, E)
+				px0, py0, pz0, E0 = ds['p0'].value.T
+				m0, pT0, y0, phi0 = JLP.fourvec_to_curvelinear(px0, py0, pz0, E0)
+			HF_dict = { 'pid': pid,
+						'pT' : pT,
+						'y'  : y,
+						'phi': phi,
+						'w' : None
+				  }
+			POI = [511, 521, 513, 523]
+			for nPDF in ['EPPS', 'nCTEQ']:
+				w = fonllcalc.interp(nPDF, system, str(sqrts), 'b', pT0, y0)
+				HF_dict['w'] = w[:,0]
+				flow = JLP.Qvector(HF_dict, JEC[Collab]['vn_B']['pTbins'],
+							JEC[Collab]['vn_B']['ybins'], POI)
+				Yield = JLP.Yield(HF_dict, JEC[Collab]['Raa_B']['pTbins'],
+							JEC[Collab]['Raa_B']['ybins'], POI)
+				gp = poi_gp.require_group(nPDF)
+				for iid in POI:
+					name = str(iid)
+					gp.require_group('Yield/'+name)
+					gp.require_group('vn/'+name)
 					gp['Yield/'+name].create_dataset('shape', data=Yield[iid]['shape'])
 					gp['Yield/'+name].create_dataset('Ntot', data=Yield[iid]['Ntot'])
 					gp['vn/'+name].create_dataset('Qn', data=flow[iid]['Qn'])

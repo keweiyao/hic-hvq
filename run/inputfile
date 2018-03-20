@@ -1,9 +1,14 @@
+nevents = 4
 sqrts = 5020
-trento_args = -x 7.0 -n 18.9 -p 0.0 -k 0.83 -w 0.96
+trento_args = -x 7.0 -n 18.4 -p 0.0 -k 1.2 -w 0.96
 tau_fs = 1.2
 xi_fs=0.5
-vishnew_args = VisHRG=0.5 VisMin=0.06 VisSlope=2.0 VisCurv=0.05 VisBulkMax=0.015 VisBulkWidth=0.02
+hydro-args= stop=0.154 min=0.08 slope=1.1 curvature=-0.5 zetas_max=0.05 zetas_width=0.02 zetas_t0=0.180 iskip_t=4 iskip_xy=4 
 Tswitch = 0.154
-particle_type = c
-N_particles = 50000
-ymax = 2.
+N_particles = 10000
+Emax = 200.
+pTmin = .5
+pTmax = 130.5
+mu = 1.0
+A = 2.
+B = 1.
