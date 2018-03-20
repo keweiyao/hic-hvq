@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
 from itertools import chain
-import sys
-import subprocess
-from multiprocessing import Pool, cpu_count
+import sys, subprocess
 
 import numpy as np
 import h5py, math
@@ -13,11 +11,6 @@ import frzout
 import fonll.fonll as fonll
 import JetCalc.LeadingParton as JLP
 from JetCalc.ExpCut import cuts as JEC
-
-def afterburner(Nstart, Nstop):
-	for index in range(Nstart, Nstop):
-		run_cmd('run_urqmd urqmd_input_{:03d} urqmd_output_{:03d}'.format(index, index))
-
 
 def run_cmd(*args, **kwargs):
 	"""
@@ -242,27 +235,10 @@ def main():
 		run_cmd('run-hvq-events {} {}'.format(sys.argv[1], ievent) )
 
 		# ==================Heavy + Soft --> UrQMD===========================
-		# step 1: combine soft and hard particles and split into n-oversamples
-		run_cmd('convert_format {} particles_in.dat c-meson-frzout.dat'.format(nsamples))
-		# step 2: split these n-oversamples into separate files
-		subprocess.call('csplit --elide-empty-files --digits=3 --quiet --prefix=urqmd_input_ urqmd_input.dat "/UQMD/" "{*}" ', shell=True)
-		# step 3: parallely run each oversamples:
-		Nproc = np.min([cpu_count()-1 or 1, 8, nsamples])
-		Nstep = np.floor(nsamples*1./Nproc).astype(int)
-		Nstart = (np.array(range(Nproc))*Nstep).astype(int)
-		Nstop = Nstart + Nstep
-		Nstop[-1] = nsamples
-		print("# start index", Nstart)
-		print("# stop index", Nstop)
-		with Pool(Nproc) as pool:
-			pool.starmap(afterburner, zip(Nstart, Nstop))
-		# step 4: combine all outputs together
-		subprocess.call('cat urqmd_output_* > particles_out.dat', shell=True)
-		# step 5: clean up
-		subprocess.call('rm -v urqmd_output_* urqmd_input_* urqmd_input.dat', shell=True)
+		run_cmd('run-urqmd {}'.format(nsamples) )
 
 		# ==================Data Processing==================================
-				# load fonll
+		# load fonll
 		fonllcalc = fonll.FONLL()
 
 		# read final particle data

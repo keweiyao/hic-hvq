@@ -63,7 +63,6 @@ for i in models/*/; do
     FC=/cvmfs/oasis.opensciencegrid.org/osg/modules/hdf5/1.8.13/bin/h5fc
     FFLAGS='-march=x86-64 -ffast-math'
   fi
-
   # determine whether to build with CMake or python
   if [[ -f CMakeLists.txt ]]; then
     # create build directory and run cmake if necessary
