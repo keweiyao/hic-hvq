@@ -208,7 +208,7 @@ def main():
 			zip(['x', 'sigma', 'v'], np.hsplit(surface_data, [3, 6, 8])),
 			pi=dict(zip(['xx', 'xy', 'yy'], surface_data.T[11:14])),
 			Pi=surface_data.T[15]),
-			ymax=3.)
+			ymax=3.)		
 
 		minsamples, maxsamples = 10, 100  # reasonable range for nsamples
 		minparts = 30000  # min number of particles to sample
