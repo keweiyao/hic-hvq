@@ -30,6 +30,7 @@ mkdir -p $scratchdir
 # copy input files to scratch
 mkdir $scratchdir/inputfiles
 cp -v $inputfiles $scratchdir/inputfiles
+cp -v -r ./PreTab/Tables $scratchdir/Tables
 
 # create directories for job stdout and stderr files
 for f in $inputfiles; do
@@ -61,6 +62,7 @@ for i in $(seq $(( histlen - 1 ))); do
   requirements="$requirements && target.machine =!= MachineAttrMachine$i"
 done
 
+
 # Create the condor submit description file.  Some notes:
 #   - This job cluster runs each input file once.  Below, the dag runs the
 #     requested number of copies.
@@ -78,7 +80,7 @@ job_machine_attrs = Machine
 job_machine_attrs_history_length = $histlen
 requirements = $requirements
 
-request_memory = 2.0G
+request_memory = 1.0G
 request_disk = 2.0G
 rank = KFlops
 
@@ -86,7 +88,7 @@ executable = $exefile
 input_file = \$BASENAME(input_file_path)
 arguments = \$(input_file) $desturl/\$(input_file)/$timestamp/\$(dag_node_name)
 
-transfer_input_files = $pkgfile, \$(input_file_path)
+transfer_input_files = $pkgfile, \$(input_file_path), Tables/\$BASENAME(input_file_path)/table.h5
 +TransferOutput = ""
 
 output = stdouterr/\$(input_file)/\$(dag_node_name).out

@@ -47,7 +47,8 @@ def main():
 		dx = icfile[prefix].attrs['dxy'] # TAB grid size
 		b = icfile[prefix].attrs['b']   # impact parameter of this event
 	# setting initialization
-	N_particles = int(config.get('N_particles')) # number of sampling
+	N_charm = int(config.get('N_charm')) # number of sampling
+	N_bottom = int(config.get('N_bottom'))
 	Emax = float(config.get('Emax')) # range of initial HQ rapidity
 	pTmin = float(config.get('pTmin')) # min of initial HQ pT
 	pTmax = float(config.get('pTmax')) # max of initial HQ pT
@@ -64,7 +65,7 @@ def main():
 	e1 = event.event(medium={'type':'dynamic', 'hydrofile': "./JetData.h5"},
 			preeq={'type':'dynamic', 'hydrofile': "./FreeStream.h5"},
 			LBT={'mu': mu}, LGV={'A': A, 'B': B},  Tc=0.154)
-	e1.initialize_HQ(   NQ=N_particles, init_flags=init_config )
+	e1.initialize_HQ(   N_charm=N_charm, N_bottom=N_bottom, init_flags=init_config )
 
 	# preeq stage
 	while e1.perform_fs_step():
@@ -80,7 +81,7 @@ def main():
 		e1.output_oscar(4 if pid == 'c' else 5, "./{}-quark-frzout.dat".format(pid))
 		# hadronization
 		os.environ["ftn20"] = "./{}-meson-frzout.dat".format(pid)
-		os.environ["ftn30"] = prefix+"parameters_hd.dat"
+		os.environ["ftn30"] = prefix+"parameters_{}_hd.dat".format(pid)
 		os.environ["ftn40"] = prefix+"recomb_{}_tot.dat".format(pid)
 		os.environ["ftn50"] = prefix+"recomb_{}_BR1.dat".format(pid)
 		subprocess.run("hvq-hadronization",

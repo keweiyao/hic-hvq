@@ -1,0 +1,22 @@
+#!/usr/bin/env python3
+import numpy as np
+from ast import literal_eval as eva
+import event
+import sys
+def main():
+	# parse config file
+	with open(sys.argv[1], 'r') as f:
+		config = dict( (i.strip() for i in l.split('=', maxsplit=1)) \
+				for l in f if l[0] != '#')
+	#echo config:
+	print('##################################')
+	for key, val in config.items():
+		print('{} = {}'.format(key, val))
+	print('##################################')
+
+	# physics!
+	mu = float(config.get('mu')) # no default, have to be sure what I am doing
+	e1 = event.event(medium={'type':'static', 'static_dt':0.1}, LBT={'mu': mu})
+
+if __name__ == "__main__":
+	main()

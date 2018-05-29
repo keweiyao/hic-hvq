@@ -119,6 +119,8 @@ def main():
 	else:
 		config = {}
 	nevents = int(config.get('nevents', 1))
+	N_charm = int(config.get('N_charm')) # number of sampling
+	N_bottom = int(config.get('N_bottom'))
 	grid_step = 0.1
 	grid_max = 15.05
 	dtau = .25*grid_step
@@ -138,14 +140,15 @@ def main():
 				yield [dset['matter_density'].value, dset['Ncoll_density'].value]
 
 	# energy
-	sqrts = int(config.get('sqrts', '5020'))
+	Exps = ['CMS', 'ALICE']
+	sqrts = int(config.get('sqrts'))
 	print (proj, targ, '@', sqrts, " GeV")
-
+	Emax = float(config.get('Emax')) # range of initial HQ rapidity
 	# read free streaming time
-	tau_fs = float(config.get('tau_fs', 0.6))
-	xi_fs = float(config.get('xi_fs', 0.5))
+	tau_fs = float(config.get('tau_fs'))
+	xi_fs = float(config.get('xi_fs'))
 	# create sampler HRG object (to be reused for all events)
-	Tswitch = float(config.get('Tswitch', .154))
+	Tswitch = float(config.get('Tswitch'))
 	hrg = frzout.HRG(Tswitch, species='urqmd', res_width=True)
 	eswitch = hrg.energy_density()
 
@@ -265,7 +268,7 @@ def main():
 
 		#============for soft particles======================
 		event_gp.attrs.create('dNch_deta', np.count_nonzero(charged & (abs_eta<.5) & is_light) / nsamples)
-		for Collab in ['ALICE', 'CMS']:
+		for Collab in Exps:
 			ref_gp = event_gp.create_group(Collab+"/REF")
 			poi_gp = event_gp.create_group(Collab+"/POI")
 
@@ -282,24 +285,22 @@ def main():
 
 			#============higher accuracy event-plane=============
 			# oversample to get a high percision event plane at freezeout
-			opTs = []; oys = []; ophis = []; counts=0; nloop=0
-			while counts < 10**5 and nloop < 1000:
+			ophi_light = np.empty(0)
+			nloop=0
+			while ophi_light.size < 10**6 and nloop < 100000:
 				nloop += 1
 				oE, opx, opy, opz = frzout.sample(surface, hrg)['p'].T
 				oM, opT, oy, ophi = JLP.fourvec_to_curvelinear(opx, opy, opz, oE)
-				counts += len(oM)
-				opTs = np.concatenate([opTs, opT])
-				ophis = np.concatenate([ophis, ophi])
-				oys = np.concatenate([oys, oy])
-			ophi_light = ophis[(JEC[Collab]['vn_ref']['ybins'][0] < oys) \
-								& (oys < JEC[Collab]['vn_ref']['ybins'][1]) \
-								& (JEC[Collab]['vn_ref']['pTbins'][0] < opTs) \
-								& (opTs < JEC[Collab]['vn_ref']['pTbins'][1])]
+				ophi = ophi[(JEC[Collab]['vn_ref']['ybins'][0] < oy) \
+						& (oy < JEC[Collab]['vn_ref']['ybins'][1]) \
+					 	& (JEC[Collab]['vn_ref']['pTbins'][0] < opT) \
+						& (opT < JEC[Collab]['vn_ref']['pTbins'][1])]
+				ophi_light = np.append(ophi_light, ophi)
 			ref_gp.create_dataset('hp-M', data=ophi_light.shape[0], dtype=np.int)
 			ref_gp.create_dataset('hp-Qn', data=np.array([np.exp(1j*n*ophi_light).sum()
 								for n in range(1, 7)]), dtype=np.complex)
-
-			#===========For heave particles======================
+			del ophi_light
+			#===========For heavy particles======================
 			# For charmed hadrons, use info after urqmd
 			HF_dict = { 'pid': abs_ID[is_c_hadron],
 						'pT' : pT[is_c_hadron],
@@ -311,10 +312,12 @@ def main():
 			for nPDF in ['EPPS', 'nCTEQ']:
 				w = fonllcalc.interp(nPDF, system, str(sqrts),
 					'c', pT0[is_c_hadron], y0[is_c_hadron])
-				HF_dict['w'] = w[:,0]
-				flow = JLP.Qvector(HF_dict, JEC[Collab]['vn_HF']['pTbins'],
+				mT = np.sqrt(1.3**2 + pT0[is_c_hadron]**2)
+				ymax = np.min([np.arccosh(Emax/mT), np.ones_like(pT0[is_c_hadron])*3.0], axis=0)
+				HF_dict['w'] = w[:,0]*pT0[is_c_hadron]*ymax
+				flow = JLP.Qvector(HF_dict, JEC['pred-pT'],#JEC[Collab]['vn_HF']['pTbins'],
 							JEC[Collab]['vn_HF']['ybins'], POI)
-				Yield = JLP.Yield(HF_dict, JEC[Collab]['Raa']['pTbins'],
+				Yield = JLP.Yield(HF_dict, JEC['pred-pT'],#JEC[Collab]['Raa']['pTbins'],
 							JEC[Collab]['Raa']['ybins'], POI)
 				gp = poi_gp.create_group(nPDF)
 				for iid in POI:
@@ -322,14 +325,14 @@ def main():
 					gp.create_group('Yield/'+name)
 					gp.create_group('vn/'+name)
 					gp['Yield/'+name].create_dataset('shape', data=Yield[iid]['shape'])
-					gp['Yield/'+name].create_dataset('Ntot', data=Yield[iid]['Ntot'])
+					gp['Yield/'+name].create_dataset('Ntot', data=Yield[iid]['Ntot']/N_charm)
 					gp['vn/'+name].create_dataset('Qn', data=flow[iid]['Qn'])
 					gp['vn/'+name].create_dataset('M', data=flow[iid]['M'])
 
 		# For bottom hadrons, use info at freezeout, since UrQMD does not
 		# includes bottom hadrons at this time
 		print("doing B hadron observables")
-		for Collab in ['ALICE', 'CMS']:
+		for Collab in Exps:
 			poi_gp = event_gp.require_group(Collab+"/POI")
 
 			with h5py.File('HeavyAtFrzout.hdf5', 'r') as fh5:
@@ -348,10 +351,12 @@ def main():
 			POI = [511, 521, 513, 523]
 			for nPDF in ['EPPS', 'nCTEQ']:
 				w = fonllcalc.interp(nPDF, system, str(sqrts), 'b', pT0, y0)
-				HF_dict['w'] = w[:,0]
-				flow = JLP.Qvector(HF_dict, JEC[Collab]['vn_B']['pTbins'],
+				mT = np.sqrt(4.2**2 + pT0**2)
+				ymax = np.min([np.arccosh(Emax/mT), np.ones_like(pT0)*3.0], axis=0)
+				HF_dict['w'] = w[:,0]*pT0*ymax
+				flow = JLP.Qvector(HF_dict, JEC['pred-pT'],#JEC[Collab]['vn_B']['pTbins'],
 							JEC[Collab]['vn_B']['ybins'], POI)
-				Yield = JLP.Yield(HF_dict, JEC[Collab]['Raa_B']['pTbins'],
+				Yield = JLP.Yield(HF_dict, JEC['pred-pT'],#JEC[Collab]['Raa_B']['pTbins'],
 							JEC[Collab]['Raa_B']['ybins'], POI)
 				gp = poi_gp.require_group(nPDF)
 				for iid in POI:
@@ -359,7 +364,7 @@ def main():
 					gp.require_group('Yield/'+name)
 					gp.require_group('vn/'+name)
 					gp['Yield/'+name].create_dataset('shape', data=Yield[iid]['shape'])
-					gp['Yield/'+name].create_dataset('Ntot', data=Yield[iid]['Ntot'])
+					gp['Yield/'+name].create_dataset('Ntot', data=Yield[iid]['Ntot']/N_bottom)
 					gp['vn/'+name].create_dataset('Qn', data=flow[iid]['Qn'])
 					gp['vn/'+name].create_dataset('M', data=flow[iid]['M'])
 
