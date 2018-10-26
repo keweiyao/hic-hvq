@@ -9,22 +9,22 @@ import event
 def save_to_dataset(group, pname):
 	line = ff.FortranRecordReader('i10,2x,i10,19(2x,d12.6)')
 	#n, id, px, py, pz, p0, M, x, y, z, t, T,
-	# vx, vy, vz, ipx, ipy, ipz, weight
+	# vx, vy, vz, ipx, ipy, ipz, ip0, weight, _
 	for level, fnamefmt in zip(['quark', 'hadron'],
 		['{}-quark-frzout.dat', '{}-meson-frzout.dat']):
 		pid = []
 		p = []
-		p0 = []
+		w = []
 		with open(fnamefmt.format(pname)) as f:
 			for i, l in enumerate(f):
 				if i>3:
 					ds = line.read(l)
 					pid.append(ds[1])
 					p.append(ds[2:6])
-					p0.append(ds[15:19])
+					w.append(ds[19])
 		group.create_dataset(level+'/pid', data=np.array(pid), dtype=np.int)
 		group.create_dataset(level+'/p', data=np.array(p), dtype=np.float)
-		group.create_dataset(level+'/p0', data=np.array(p0), dtype=np.float)
+		group.create_dataset(level+'/w', data=np.array(w), dtype=np.float)
 
 def main():
 	# parse config file
@@ -46,33 +46,31 @@ def main():
 		TAB = icfile[prefix+'/Ncoll_density'].value.T	# TAB profile
 		dx = icfile[prefix].attrs['dxy'] # TAB grid size
 		b = icfile[prefix].attrs['b']   # impact parameter of this event
-	# setting initialization
-	N_charm = int(config.get('N_charm')) # number of sampling
-	N_bottom = int(config.get('N_bottom'))
-	Emax = float(config.get('Emax')) # range of initial HQ rapidity
-	pTmin = float(config.get('pTmin')) # min of initial HQ pT
-	pTmax = float(config.get('pTmax')) # max of initial HQ pT
 	# physics!
 	mu = float(config.get('mu')) # no default, have to be sure what I am doing
 	A = float(config.get('A')) # no default, have to be sure what I am doing
 	B = float(config.get('B')) # no default, have to be sure what I am doing
+	afix = float(config.get('afix')) # if -1, running coupling, else this is the value of fix alpha_s
 
 	# initilization fonfigureation
-	init_config =  { 'type': 'A+B',
-			'pTmin': pTmin, 'pTmax': pTmax, 'Emax': Emax,
+	init_config =  { 'type': 'Pythia+Trento', 'PythiaInput': "PythiaInput.dat",
 			 'TAB': TAB, 'dxy': dx, 'b': b}
 
-	e1 = event.event(medium={'type':'dynamic', 'hydrofile': "./JetData.h5"},
-			preeq={'type':'dynamic', 'hydrofile': "./FreeStream.h5"},
-			LBT={'mu': mu}, LGV={'A': A, 'B': B},  Tc=0.154)
-	e1.initialize_HQ(   N_charm=N_charm, N_bottom=N_bottom, init_flags=init_config )
+	e1 = event.event(preeq={'type':'dynamic', 'hydrofile': "./FreeStream.h5"},
+			medium={'type':'dynamic', 'hydrofile': "./JetData.h5"},
+			LIDO={'mu': mu, 'afix': afix, 'A': A, 'B': B},  Tc=0.154)
+	e1.initialize_HQ(init_config )
 
 	# preeq stage
+	p,x = e1.HQ_hist()
+	print("Initial mean-pT:", ((p.T[1]**2+p.T[2]**2)**0.5).mean())
 	while e1.perform_fs_step():
 		print("t = {:1.3f} [fm/c]".format(e1.sys_time()) )
 	# hydro stage
 	while e1.perform_hydro_step():
 		print("t = {:1.3f} [fm/c]".format(e1.sys_time()) )
+	p,x = e1.HQ_hist()
+	print("final mean-pT:", ((p.T[1]**2+p.T[2]**2)**0.5).mean())
 
 	# hadronization
 	prefix = "./{}/share/hvq-hadronization/".format(pkgname)

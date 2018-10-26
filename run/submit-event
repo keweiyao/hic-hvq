@@ -1,10 +1,5 @@
 #!/bin/bash
 
-if ! voms-proxy-info -exists -hours 10 2> /dev/null; then
-  echo 'create a proxy first'
-  exit 1
-fi
-
 if (( $# < 3 )); then
   echo "usage: $0 batch_label jobs_per_input_file input_files..."
   exit 1
@@ -20,17 +15,21 @@ echo $inputfiles
 # every batch needs a unique ID -- a timestamp works well
 timestamp="$(date --utc +%Y%m%d_%H%M%S)"
 
-# gridftp destination for all events in this batch
-desturl="gsiftp://ntheoryfs01.phy.duke.edu/var/phy/project/nukeserv/$nukeuser/hic-hvq/$batchlabel"
-
 # create a "scratch" directory for all the condor files
 scratchdir="/local-scratch/$USER/condor/${timestamp}_${batchlabel//\//_}"
 mkdir -p $scratchdir
 
+# create local folder to store returned files
+for input_file in $inputfiles; do
+  mkdir -p $scratchdir/Results/$(basename $input_file)
+  for i in `seq -w 0 $(($jobsperinput-1))`; do
+    mkdir -p $scratchdir/Results/$(basename $input_file)/event-$i
+  done
+done
+
 # copy input files to scratch
 mkdir $scratchdir/inputfiles
 cp -v $inputfiles $scratchdir/inputfiles
-cp -v -r ./PreTab/Tables $scratchdir/Tables
 
 # create directories for job stdout and stderr files
 for f in $inputfiles; do
@@ -73,7 +72,6 @@ done
 #   - Failed jobs are not removed but put back in the queue to be retried.
 cat > job <<EOF
 universe = vanilla
-x509userproxy = /tmp/x509up_u$(id --user)
 +ProjectName = "Duke-QGP"
 
 job_machine_attrs = Machine
@@ -86,10 +84,13 @@ rank = KFlops
 
 executable = $exefile
 input_file = \$BASENAME(input_file_path)
-arguments = \$(input_file) $desturl/\$(input_file)/$timestamp/\$(dag_node_name)
+arguments = \$(input_file)
 
-transfer_input_files = $pkgfile, \$(input_file_path), Tables/\$BASENAME(input_file_path)/table.h5
-+TransferOutput = ""
+transfer_input_files = $pkgfile, \$(input_file_path)
+#should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+transfer_output_files = results.hdf5
+transfer_output_remaps = "results.hdf5=Results/\$(input_file)/event-\$(dag_node_name)/results.hdf5"
 
 output = stdouterr/\$(input_file)/\$(dag_node_name).out
 error = stdouterr/\$(input_file)/\$(dag_node_name).err

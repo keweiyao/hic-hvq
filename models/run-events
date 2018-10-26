@@ -8,7 +8,6 @@ import h5py, math
 
 import freestream
 import frzout
-import fonll.fonll as fonll
 import JetCalc.LeadingParton as JLP
 from JetCalc.ExpCut import cuts as JEC
 
@@ -119,8 +118,6 @@ def main():
 	else:
 		config = {}
 	nevents = int(config.get('nevents', 1))
-	N_charm = int(config.get('N_charm')) # number of sampling
-	N_bottom = int(config.get('N_bottom'))
 	grid_step = 0.1
 	grid_max = 15.05
 	dtau = .25*grid_step
@@ -143,7 +140,6 @@ def main():
 	Exps = ['CMS', 'ALICE']
 	sqrts = int(config.get('sqrts'))
 	print (proj, targ, '@', sqrts, " GeV")
-	Emax = float(config.get('Emax')) # range of initial HQ rapidity
 	# read free streaming time
 	tau_fs = float(config.get('tau_fs'))
 	xi_fs = float(config.get('xi_fs'))
@@ -151,7 +147,7 @@ def main():
 	Tswitch = float(config.get('Tswitch'))
 	hrg = frzout.HRG(Tswitch, species='urqmd', res_width=True)
 	eswitch = hrg.energy_density()
-
+	NPythiaEvents = int(config.get('NPythiaEvents'))
 	# append switching energy density to vishnew arguments
 	vishnew_args = [
 		config.get('hydro-args', ''),
@@ -179,6 +175,12 @@ def main():
 		event_gp.attrs.create('initial_entropy', grid_step**2 * ic[0].sum())
 		event_gp.attrs.create('N_coll', grid_step**2 * ic[1].sum())
 
+		# ==================Pythia==================================
+		run_cmd('pythia-gun', './hic-hvq/share/pythia-setting.txt', str(NPythiaEvents))
+		total_weight, sigma_gen, Neve, Nccbar = np.loadtxt("PythiaSummary.dat").T
+		if Neve != NPythiaEvents:
+			logging.warning("Neve != Neve from the input")
+		charm_cross_section_normalization = .5 * sigma_gen / total_weight;
 		# ==================IC+freestream===========================
 		# save multi frame of freestreaming energy density
 		# from xi*tau_fs to tau_fs, with 0.1 < xi < 1.0
@@ -241,11 +243,9 @@ def main():
 		run_cmd('run-urqmd {}'.format(nsamples) )
 
 		# ==================Data Processing==================================
-		# load fonll
-		fonllcalc = fonll.FONLL()
 
 		# read final particle data
-		ID, charge, fmass, px, py, pz, y, eta, pT0, y0, s1, s2 = (
+		ID, charge, fmass, px, py, pz, y, eta, pT0, y0, w, _ = (
 			np.array(col, dtype=dtype) for (col, dtype) in
 			zip(
 				zip(*read_text_file('particles_out.dat')),
@@ -303,72 +303,59 @@ def main():
 			#===========For heavy particles======================
 			# For charmed hadrons, use info after urqmd
 			HF_dict = { 'pid': abs_ID[is_c_hadron],
-						'pT' : pT[is_c_hadron],
-						'y'  : y[is_c_hadron],
-						'phi': phi[is_c_hadron],
-						'w' : None
-				  }
+				'pT' : pT[is_c_hadron],
+				'y'  : y[is_c_hadron],
+				'phi': phi[is_c_hadron],
+				'w' : w[is_c_hadron]*charm_cross_section_normalization # normalized to an area units
+			  	}
 			POI = [411, 421, 10411]
-			for nPDF in ['EPPS', 'nCTEQ']:
-				w = fonllcalc.interp(nPDF, system, str(sqrts),
-					'c', pT0[is_c_hadron], y0[is_c_hadron])
-				mT = np.sqrt(1.3**2 + pT0[is_c_hadron]**2)
-				ymax = np.min([np.arccosh(Emax/mT), np.ones_like(pT0[is_c_hadron])*3.0], axis=0)
-				HF_dict['w'] = w[:,0]*pT0[is_c_hadron]*ymax
-				flow = JLP.Qvector(HF_dict, JEC['pred-pT'],#JEC[Collab]['vn_HF']['pTbins'],
-							JEC[Collab]['vn_HF']['ybins'], POI)
-				Yield = JLP.Yield(HF_dict, JEC['pred-pT'],#JEC[Collab]['Raa']['pTbins'],
-							JEC[Collab]['Raa']['ybins'], POI)
-				gp = poi_gp.create_group(nPDF)
-				for iid in POI:
-					name = str(iid)
-					gp.create_group('Yield/'+name)
-					gp.create_group('vn/'+name)
-					gp['Yield/'+name].create_dataset('shape', data=Yield[iid]['shape'])
-					gp['Yield/'+name].create_dataset('Ntot', data=Yield[iid]['Ntot']/N_charm)
-					gp['vn/'+name].create_dataset('Qn', data=flow[iid]['Qn'])
-					gp['vn/'+name].create_dataset('M', data=flow[iid]['M'])
+			flow = JLP.Qvector(HF_dict, JEC['pred-pT'],#JEC[Collab]['vn_HF']['pTbins'],
+						JEC[Collab]['vn_HF']['ybins'], POI)
+			Yield = JLP.Yield(HF_dict, JEC['pred-pT'],#JEC[Collab]['Raa']['pTbins'],
+						JEC[Collab]['Raa']['ybins'], POI)
+			gp = poi_gp.create_group("EPS09")
+			for iid in POI:
+				name = str(iid)
+				gp.create_group('Yield/'+name)
+				gp.create_group('vn/'+name)
+				gp['Yield/'+name].create_dataset('shape', data=Yield[iid]['shape'])
+				gp['Yield/'+name].create_dataset('Ntot', data=Yield[iid]['Ntot'])
+				gp['vn/'+name].create_dataset('Qn', data=flow[iid]['Qn'])
+				gp['vn/'+name].create_dataset('M', data=flow[iid]['M'])
 
 		# For bottom hadrons, use info at freezeout, since UrQMD does not
 		# includes bottom hadrons at this time
+		"""
 		print("doing B hadron observables")
 		for Collab in Exps:
 			poi_gp = event_gp.require_group(Collab+"/POI")
-
 			with h5py.File('HeavyAtFrzout.hdf5', 'r') as fh5:
 				ds = fh5["event/b/hadron"]
 				pid = np.abs(ds['pid'].value).astype(int)
 				px, py, pz, E = ds['p'].value.T
 				m, pT, y, phi = JLP.fourvec_to_curvelinear(px, py, pz, E)
-				px0, py0, pz0, E0 = ds['p0'].value.T
-				m0, pT0, y0, phi0 = JLP.fourvec_to_curvelinear(px0, py0, pz0, E0)
+				w = ds['w'].value
 			HF_dict = { 'pid': pid,
-						'pT' : pT,
-						'y'  : y,
-						'phi': phi,
-						'w' : None
+				'pT' : pT,
+				'y'  : y,
+				'phi': phi,
+				'w' : w
 				  }
 			POI = [511, 521, 513, 523]
-			for nPDF in ['EPPS', 'nCTEQ']:
-				w = fonllcalc.interp(nPDF, system, str(sqrts), 'b', pT0, y0)
-				mT = np.sqrt(4.2**2 + pT0**2)
-				ymax = np.min([np.arccosh(Emax/mT), np.ones_like(pT0)*3.0], axis=0)
-				HF_dict['w'] = w[:,0]*pT0*ymax
-				flow = JLP.Qvector(HF_dict, JEC['pred-pT'],#JEC[Collab]['vn_B']['pTbins'],
-							JEC[Collab]['vn_B']['ybins'], POI)
-				Yield = JLP.Yield(HF_dict, JEC['pred-pT'],#JEC[Collab]['Raa_B']['pTbins'],
-							JEC[Collab]['Raa_B']['ybins'], POI)
-				gp = poi_gp.require_group(nPDF)
-				for iid in POI:
-					name = str(iid)
-					gp.require_group('Yield/'+name)
-					gp.require_group('vn/'+name)
-					gp['Yield/'+name].create_dataset('shape', data=Yield[iid]['shape'])
-					gp['Yield/'+name].create_dataset('Ntot', data=Yield[iid]['Ntot']/N_bottom)
-					gp['vn/'+name].create_dataset('Qn', data=flow[iid]['Qn'])
-					gp['vn/'+name].create_dataset('M', data=flow[iid]['M'])
-
-
+			flow = JLP.Qvector(HF_dict, JEC['pred-pT'],#JEC[Collab]['vn_B']['pTbins'],
+					JEC[Collab]['vn_B']['ybins'], POI)
+			Yield = JLP.Yield(HF_dict, JEC['pred-pT'],#JEC[Collab]['Raa_B']['pTbins'],
+					JEC[Collab]['Raa_B']['ybins'], POI)
+			gp = poi_gp.require_group("EPS09")
+			for iid in POI:
+				name = str(iid)
+				gp.require_group('Yield/'+name)
+				gp.require_group('vn/'+name)
+				gp['Yield/'+name].create_dataset('shape', data=Yield[iid]['shape'])
+				gp['Yield/'+name].create_dataset('Ntot', data=Yield[iid]['Ntot'])
+				gp['vn/'+name].create_dataset('Qn', data=flow[iid]['Qn'])
+				gp['vn/'+name].create_dataset('M', data=flow[iid]['M'])
+		"""
 	fresult.close()
 
 

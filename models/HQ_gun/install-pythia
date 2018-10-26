@@ -1,0 +1,36 @@
+#!/bin/bash
+source /cvmfs/oasis.opensciencegrid.org/osg/modules/lmod/current/init/bash
+module purge
+module load gcc/6.2.0 hdf5/1.8.13 python/3.5.2 all-pkgs
+export FC='gfortran'
+export CC='gcc'
+
+# set linker flags to prefer the module versions of libraries to the system versions
+# the linker reads $LIBRARY_PATH but gives it lower priority than the standard paths
+# this uses -L flags to give $LIBRARY_PATH higher priority
+export LDFLAGS="-L${LIBRARY_PATH//:/ -L}"
+
+
+pkgdir=$1
+
+if [[ -d pythia8235 ]]; then
+  wget http://home.thep.lu.se/~torbjorn/pythia8/pythia8235.tgz
+  tar xvfz pythia8235.tgz
+fi
+
+cd pythia8235
+./configure --prefix=$pkgdir --enable-64bit
+make -j16
+make install
+cd ..
+
+export PATH=$PATH:$pkgdir/bin
+export PYTHIA8DATA=$pkgdir/share/Pythia8/xmldoc/
+export LD_LIBRARY_PATH=$PATH:$pkgdir/
+
+
+g++ pythia-gun.cpp -std=c++11 -I$pkgdir/include -L$pkgdir/lib -lpythia8 -ldl -o pythia-gun
+
+cp pythia-gun $pkgdir/bin
+cp pythia-setting.txt $pkgdir/share/
+ 
