@@ -58,11 +58,11 @@ int main(int argc, char* argv[]){
 		for (size_t i = 0; i < event.size(); ++i) 
 		{
 			auto p = event[i];
-			if (p.isFinal() && p.idAbs() == 4 && std::abs(p.eta()) < 3.) 
+			if (p.isFinal() && p.idAbs() == 4 && std::abs(p.eta()) < 2.5) 
 			{
 				item c_entry;
 				// final momenta 
-				c_entry.M = p.m(); // mass
+				c_entry.M = 1.3; // mass
 				c_entry.id = 4; // charm quark
 				c_entry.weight = weight;
 				c_entry.e = p.e();

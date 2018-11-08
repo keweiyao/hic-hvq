@@ -1,12 +1,12 @@
 nevents = 1
-NPythiaEvents = 40000
+NPythiaEvents = 300000
 sqrts = 5020
 trento_args = -x 7.0 -n 18.4 -p 0.0 -k 1.2 -w 0.6 --ncoll
 tau_fs = 1.2
 xi_fs = 0.5
 vishnew_args = stop=0.153 min=0.08 slope=1.1 curvature=-0.5 zetas_max=0.05 zetas_width=0.02 zetas_t0=0.180 iskip_t=1 iskip_xy=2
 Tswitch = 0.154
-mu = 2.0
+mu = 1.0
 A = 0.64
 B = 0.0
-afix = 0.4
+afix = -1.0

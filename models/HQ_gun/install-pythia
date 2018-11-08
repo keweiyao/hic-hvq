@@ -13,7 +13,7 @@ export LDFLAGS="-L${LIBRARY_PATH//:/ -L}"
 
 pkgdir=$1
 
-if [[ -d pythia8235 ]]; then
+if ! [[ -d pythia8235 ]]; then
   wget http://home.thep.lu.se/~torbjorn/pythia8/pythia8235.tgz
   tar xvfz pythia8235.tgz
 fi

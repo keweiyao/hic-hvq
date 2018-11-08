@@ -175,12 +175,6 @@ def main():
 		event_gp.attrs.create('initial_entropy', grid_step**2 * ic[0].sum())
 		event_gp.attrs.create('N_coll', grid_step**2 * ic[1].sum())
 
-		# ==================Pythia==================================
-		run_cmd('pythia-gun', './hic-hvq/share/pythia-setting.txt', str(NPythiaEvents))
-		total_weight, sigma_gen, Neve, Nccbar = np.loadtxt("PythiaSummary.dat").T
-		if Neve != NPythiaEvents:
-			logging.warning("Neve != Neve from the input")
-		charm_cross_section_normalization = .5 * sigma_gen / total_weight;
 		# ==================IC+freestream===========================
 		# save multi frame of freestreaming energy density
 		# from xi*tau_fs to tau_fs, with 0.1 < xi < 1.0
@@ -235,6 +229,13 @@ def main():
 						break
 
 		event_gp.attrs.create('nsamples', nsamples, dtype=np.int)
+
+		# ==================Pythia==================================
+		run_cmd('pythia-gun', './hic-hvq/share/pythia-setting.txt', str(NPythiaEvents))
+		total_weight, sigma_gen, Neve, Nccbar = np.loadtxt("PythiaSummary.dat").T
+		if Neve != NPythiaEvents:
+			logging.warning("Neve != Neve from the input")
+		charm_cross_section_normalization = .5 * sigma_gen / total_weight;
 
 		# ==================Heavy Flavor===========================
 		run_cmd('run-hvq-events {} {}'.format(sys.argv[1], ievent) )
