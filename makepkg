@@ -4,44 +4,6 @@ export CFLAGS='-ffast-math'
 export FFLAGS=$CFLAGS
 export CXXFLAGS=$CFLAGS
 
-# extra preparation when compiling on OSG submit hosts
-load_osg(){
-  # load lmod
-  source /cvmfs/oasis.opensciencegrid.org/osg/modules/lmod/current/init/bash
-
-  # load necessary modules:
-  #  - recent version of gcc, for c++11 among other things
-  #  - recent version of cmake
-  #  - boost for c++ codes
-  #  - hdf5 for trento
-  #  - python and packages
-  module purge
-  module load gcc/6.2.0 cmake boost/1.62.0-cxx11 gsl/2.3 python/3.5.2 all-pkgs libicu/4.2.1
-  module load hdf5/1.8.20-cxx11
-  module list
-
-  # explicitl set the standard environment variables CPATH and LIBRARY_PATH
-  # set corresponding variables for cmake
-  export CMAKE_INCLUDE_PATH=$CPATH
-  export CMAKE_LIBRARY_PATH=$LIBRARY_PATH
-
-  # set compiler flags
-  export CFLAGS="-march=x86-64 -mtune=intel -ffast-math"
-  export FFLAGS="$CFLAGS"
-  export CXXFLAGS="$CFLAGS"
-  # set fortran compiler to override cmake default
-  export FC='gfortran'
-
-  # set linker flags to prefer the module versions of libraries to the system versions
-  # the linker reads $LIBRARY_PATH but gives it lower priority than the standard paths
-  # this uses -L flags to give $LIBRARY_PATH higher priority
-  export LDFLAGS="-L${LIBRARY_PATH//:/ -L}"
-}
-
-if [[ $(hostname) =~ opensciencegrid.org|osgconnect.net ]]; then
-  load_osg
-fi
-
 # read optional argument destdir (where to place package file)
 # default is the current directory
 destdir=${1-.}
@@ -58,11 +20,6 @@ pkgdir="$installdir/$pkgname"
 for i in models/*/; do
   pushd $i
   
-  if [[ $(basename $i) == "osu-hydro" ]] && [[ $(hostname) =~ opensciencegrid.org|osgconnect.net ]]; then
-    module unload gcc
-    FC=/cvmfs/oasis.opensciencegrid.org/osg/modules/hdf5/1.8.13/bin/h5fc
-    FFLAGS='-march=x86-64 -ffast-math'
-  fi
   # determine whether to build with CMake or python
   if [[ -f install-pythia ]]; then
     ./install-pythia $pkgdir 
@@ -96,16 +53,12 @@ for i in models/*/; do
     exit 1
   fi
 
-  if [[ $(basename $i) == "osu-hydro" ]] && [[ $(hostname) =~ opensciencegrid.org|osgconnect.net ]]; then
-     load_osg
-  fi
-
 
   popd
 done
 
 # install the event runner script
-install -v models/run-* $pkgdir/bin
+install -v models/run.py models/run-urqmd $pkgdir/bin
 
 # create tgz for distributing to each job
 tar --verbose --create --gzip --file $destdir/$pkgname.tar.gz \

@@ -1,15 +1,3 @@
-[submodule "Medium-Reader"]
-	path = models/LBT-LGV/Medium-Reader
-	url = https://github.com/keweiyao/Medium-Reader.git
-[submodule "Event"]
-	path = models/LBT-LGV/Event
-	url = https://github.com/keweiyao/Event.git
-[submodule "HQ-Evo"]
-	path = models/LBT-LGV/HQ-Evo
-	url = https://github.com/keweiyao/HQ-Evo.git
-[submodule "LB-doc"]
-	path = LB-doc
-	url = https://github.com/keweiyao/LB-doc.git
 [submodule "vishnew"]
 	path = models/vishnew
 	url = https://github.com/keweiyao/vishnew.git
@@ -34,12 +22,6 @@
 [submodule "models/trento"]
 	path = models/trento
 	url = https://github.com/keweiyao/trento3d.git
-[submodule "models/Scattering"]
-	path = models/Scattering
-	url = https://github.com/keweiyao/Scattering.git
-[submodule "models/fonll"]
-	path = models/fonll
-	url = https://github.com/keweiyao/fonll
 [submodule "models/JetCalc"]
 	path = models/JetCalc
 	url = https://github.com/keweiyao/JetCalc
